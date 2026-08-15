@@ -87,6 +87,7 @@ class AiortcWebRTCEngine:
         await self.bridge.call(
             _register_message_handler, channel, connection.on_message
         )
+        await self.bridge.call(_register_channel_lifecycle, channel, connection)
         return connection
 
     async def create_init_data_channel(self) -> None:
@@ -138,6 +139,7 @@ class AiortcWebRTCEngine:
             await self.bridge.call(
                 _register_message_handler, channel, connection.on_message
             )
+            await self.bridge.call(_register_channel_lifecycle, channel, connection)
             await send.send(connection)
 
         def on_channel(channel: Any) -> None:
@@ -279,6 +281,11 @@ def _candidate_from_data(candidate_data: dict[str, Any], candidate_type: Any) ->
 
 def _register_message_handler(channel: Any, handler: Any) -> None:
     channel.on("message", handler)
+
+
+def _register_channel_lifecycle(channel: Any, connection: WebRTCConnection) -> None:
+    channel.on("open", connection.on_open)
+    channel.on("close", connection.on_close)
 
 
 def _register_data_channel_handler(peer_connection: Any, handler: Any) -> None:

@@ -15,6 +15,8 @@ class DataChannel(Protocol):
 
     def close(self) -> None: ...
 
+    def on(self, event: str, handler: Any) -> None: ...
+
 
 class WebRTCConnection(IRawConnection):
     """Trio-facing connection over a reliable WebRTC data channel."""
@@ -38,6 +40,34 @@ class WebRTCConnection(IRawConnection):
         self._read_closed = False
         self._write_closed = False
         self._closed = False
+        self._ready = trio.Event()
+        if getattr(channel, "readyState", "open") == "open":
+            self._ready.set()
+
+    def on_open(self) -> None:
+        """Receive the aiortc data-channel open callback."""
+        trio.from_thread.run_sync(self._mark_ready, trio_token=self._trio_token)
+
+    def on_close(self) -> None:
+        """Receive the aiortc data-channel close callback."""
+        trio.from_thread.run(
+            self._finish_remote_close,
+            trio_token=self._trio_token,
+        )
+
+    async def wait_ready(self) -> None:
+        """Wait until the underlying data channel is ready for writes."""
+        await self._ready.wait()
+        if self._closed:
+            raise RuntimeError("WebRTC connection is closed")
+
+    def _mark_ready(self) -> None:
+        self._ready.set()
+
+    async def _finish_remote_close(self) -> None:
+        self._read_closed = True
+        self._write_closed = True
+        await self._incoming_send.aclose()
 
     def on_message(self, message: bytes | str) -> None:
         """Receive a data-channel callback from the asyncio engine thread."""
@@ -55,7 +85,11 @@ class WebRTCConnection(IRawConnection):
 
     async def read(self, n: int | None = None) -> bytes:
         while not self._messages and not self._read_closed:
-            incoming = await self._incoming_receive.receive()
+            try:
+                incoming = await self._incoming_receive.receive()
+            except trio.EndOfChannel:
+                self._read_closed = True
+                break
             self._buffer.extend(incoming)
             frames, remainder = decode_frames(bytes(self._buffer))
             self._buffer = bytearray(remainder)
