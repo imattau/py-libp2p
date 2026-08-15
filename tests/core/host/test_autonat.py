@@ -166,6 +166,20 @@ async def test_probe_sends_addresses_and_records_result():
 
 
 @pytest.mark.trio
+async def test_probe_round_trip_between_hosts():
+    async with HostFactory.create_batch_and_listen(2) as hosts:
+        client, server = hosts
+        client_service = AutoNATService(client)
+        AutoNATService(server)
+        client.get_peerstore().add_addrs(server.get_id(), server.get_addrs(), 60_000)
+
+        result = await client_service.probe(server.get_id(), server.get_addrs())
+
+        assert result is True
+        assert client_service.get_status() == AutoNATStatus.UNKNOWN
+
+
+@pytest.mark.trio
 async def test_handle_dial():
     """Test that the handle_dial method works correctly."""
     async with HostFactory.create_batch_and_listen(2) as hosts:
