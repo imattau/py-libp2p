@@ -99,6 +99,7 @@ class BasicHost(IHost):
         conn_manager: INotifee | None = None,
         negotitate_timeout: int = DEFAULT_NEGOTIATE_TIMEOUT,
         enable_autonat: bool = False,
+        enable_hole_punching: bool = False,
     ) -> None:
         self._network = network
         self._network.set_stream_handler(self._swarm_stream_handler)
@@ -112,6 +113,10 @@ class BasicHost(IHost):
             from libp2p.host.autonat.autonat import AutoNATService
 
             self.autonat = AutoNATService(self)
+        if enable_hole_punching:
+            from libp2p.host.holepunch.holepunch import HolePunchService
+
+            self.holepunch = HolePunchService(self)
         if enable_mDNS:
             self.mDNS = MDNSDiscovery(network)
         if bootstrap:
