@@ -150,6 +150,10 @@ async def chat_demo(host_a, host_b):
     host_a.set_stream_handler(CHAT_PROTOCOL_ID, stream_handler_a)
     host_b.set_stream_handler(CHAT_PROTOCOL_ID, stream_handler_b)
 
+    # The fixture initially dials host_a from host_b. Ensure host_a also has
+    # the peer address before opening its own stream.
+    await host_a.connect(info_from_p2p_addr(host_b.get_addrs()[0]))
+
     stream_a = await host_a.new_stream(host_b.get_id(), [CHAT_PROTOCOL_ID])
     stream_b = await host_b.new_stream(host_a.get_id(), [CHAT_PROTOCOL_ID])
 
@@ -340,5 +344,7 @@ async def test_protocols(test, security_protocol):
             addr = hosts[0].get_addrs()[0]
             info = info_from_p2p_addr(addr)
             await hosts[1].connect(info)
+            reverse_info = info_from_p2p_addr(hosts[1].get_addrs()[0])
+            await hosts[0].connect(reverse_info)
 
         await test(hosts[0], hosts[1])

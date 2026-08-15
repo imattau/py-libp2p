@@ -293,7 +293,7 @@ class GossipSub(IPubsubRouter, Service):
             floodsub_peers: set[ID] = {
                 peer_id
                 for peer_id in self.pubsub.peer_topics[topic]
-                if self.peer_protocol[peer_id] == floodsub.PROTOCOL_ID
+            if self.peer_protocol.get(peer_id) == floodsub.PROTOCOL_ID
             }
             send_to.update(floodsub_peers)
 
@@ -680,7 +680,7 @@ class GossipSub(IPubsubRouter, Service):
         gossipsub_peers_in_topic = {
             peer_id
             for peer_id in self.pubsub.peer_topics[topic]
-            if self.peer_protocol[peer_id] == PROTOCOL_ID
+            if self.peer_protocol.get(peer_id) == PROTOCOL_ID
         }
         if backoff_check:
             # filter out peers that are in back off for this topic

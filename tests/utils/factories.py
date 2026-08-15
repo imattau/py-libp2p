@@ -124,7 +124,9 @@ from libp2p.transport.upgrader import (
     TransportUpgrader,
 )
 
-DEFAULT_SECURITY_PROTOCOL_ID = PLAINTEXT_PROTOCOL_ID
+# Match the production default used by ``new_swarm``. Legacy transports are
+# covered by tests that pass their protocol explicitly.
+DEFAULT_SECURITY_PROTOCOL_ID = NOISE_PROTOCOL_ID
 
 
 def default_key_pair_factory() -> KeyPair:

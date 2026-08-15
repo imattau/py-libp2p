@@ -39,8 +39,12 @@ from libp2p.exceptions import (
     ParseError,
     ValidationError,
 )
+from libp2p.host.exceptions import (
+    StreamFailure,
+)
 from libp2p.io.exceptions import (
     IncompleteReadError,
+    IOException,
 )
 from libp2p.network.events import (
     EventConnected,
@@ -60,6 +64,10 @@ from libp2p.peer.id import (
 )
 from libp2p.peer.peerdata import (
     PeerDataError,
+)
+from libp2p.stream_muxer.exceptions import (
+    MuxedConnError,
+    MuxedStreamError,
 )
 from libp2p.tools.async_service import (
     Service,
@@ -481,7 +489,13 @@ class Pubsub(Service, IPubsub):
 
         try:
             stream: INetStream = await self.host.new_stream(peer_id, self.protocols)
-        except SwarmException as error:
+        except (
+            IOException,
+            MuxedConnError,
+            MuxedStreamError,
+            StreamFailure,
+            SwarmException,
+        ) as error:
             logger.debug("fail to add new peer %s, error %s", peer_id, error)
             return
 

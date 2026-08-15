@@ -25,6 +25,7 @@ async def test_live_peers_basic(security_protocol):
         addr = host_b.get_addrs()[0]
         info = info_from_p2p_addr(addr)
         await host_a.connect(info)
+        await trio.sleep(0.1)
 
         # Both should show each other as live peers
         assert host_b.get_id() in host_a.get_live_peers()
@@ -93,6 +94,7 @@ async def test_live_peers_multiple_connections(security_protocol):
             addr = peer.get_addrs()[0]
             info = info_from_p2p_addr(addr)
             await host_a.connect(info)
+            await trio.sleep(0.05)
 
         # Verify host_a sees both peers as live
         live_peers = host_a.get_live_peers()
@@ -135,6 +137,7 @@ async def test_live_peers_reconnect(security_protocol):
 
         # Reconnect
         await host_a.connect(info)
+        await trio.sleep(0.05)
 
         # Verify reconnection
         assert host_b.get_id() in host_a.get_live_peers()
@@ -158,6 +161,7 @@ async def test_live_peers_unexpected_drop(security_protocol):
         addr = host_b.get_addrs()[0]
         info = info_from_p2p_addr(addr)
         await host_a.connect(info)
+        await trio.sleep(0.05)
 
         # Verify initial connection
         assert peer_b_id in host_a.get_live_peers()
@@ -176,6 +180,7 @@ async def test_live_peers_unexpected_drop(security_protocol):
 
         # Verify we can reconnect after unexpected drop
         await host_a.connect(info)
+        await trio.sleep(0.05)
 
         # Verify reconnection successful
         assert peer_b_id in host_a.get_live_peers()

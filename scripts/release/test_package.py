@@ -2,6 +2,7 @@ from pathlib import (
     Path,
 )
 import subprocess
+import sys
 from tempfile import (
     TemporaryDirectory,
 )
@@ -43,7 +44,11 @@ def test_install_local_wheel() -> None:
         install_wheel(venv_path, wheel_path)
         print("Installed", wheel_path.absolute(), "to", venv_path)
         print(f"Activate with `source {venv_path}/bin/activate`")
-        input("Press enter when the test has completed. The directory will be deleted.")
+        if sys.stdin.isatty():
+            input(
+                "Press enter when the test has completed. "
+                "The directory will be deleted."
+            )
 
 
 if __name__ == "__main__":

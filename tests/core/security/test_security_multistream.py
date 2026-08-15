@@ -93,8 +93,8 @@ async def test_single_insecure_security_transport_succeeds(
 
 
 @pytest.mark.trio
-async def test_default_insecure_security():
+async def test_default_security():
     def assertion_func(conn):
-        assert isinstance(conn, InsecureSession)
+        assert isinstance(conn, SecureSession)
 
     await perform_simple_test(assertion_func, None)
