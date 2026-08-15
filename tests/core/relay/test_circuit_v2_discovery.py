@@ -9,6 +9,10 @@ import trio
 from libp2p.relay.circuit_v2.discovery import (
     RelayDiscovery,
 )
+from libp2p.relay.circuit_v2.framing import (
+    encode_message,
+    read_message,
+)
 from libp2p.relay.circuit_v2.pb import circuit_pb2 as proto
 from libp2p.relay.circuit_v2.protocol import (
     PROTOCOL_ID,
@@ -16,9 +20,6 @@ from libp2p.relay.circuit_v2.protocol import (
 )
 from libp2p.tools.async_service import (
     background_trio_service,
-)
-from libp2p.tools.constants import (
-    MAX_READ_LEN,
 )
 from libp2p.tools.utils import (
     connect,
@@ -43,7 +44,7 @@ async def simple_stream_handler(stream):
     logger.info("Simple stream handler invoked")
     try:
         # Read the request
-        request_data = await stream.read(MAX_READ_LEN)
+        request_data = await read_message(stream)
         if not request_data:
             logger.error("Empty request received")
             return
@@ -75,7 +76,7 @@ async def simple_stream_handler(stream):
 
             # Send the response
             logger.info("Sending response")
-            await stream.write(response.SerializeToString())
+            await stream.write(encode_message(response.SerializeToString()))
             logger.info("Response sent")
     except Exception as e:
         logger.error("Error in simple stream handler: %s", str(e))

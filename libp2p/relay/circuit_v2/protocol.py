@@ -43,6 +43,10 @@ from libp2p.tools.async_service import (
     Service,
 )
 
+from .framing import (
+    encode_message,
+    read_message,
+)
 from .pb.circuit_pb2 import (
     HopMessage,
     Limit,
@@ -331,7 +335,7 @@ class CircuitV2Protocol(Service):
                 with trio.fail_after(
                     STREAM_READ_TIMEOUT * 2
                 ):  # Double the timeout for reading
-                    msg_bytes = await stream.read(MAX_MESSAGE_SIZE + 1)
+                    msg_bytes = await read_message(stream)
                     if not msg_bytes:
                         logger.error(
                             "Empty read from stream from %s",
@@ -346,15 +350,8 @@ class CircuitV2Protocol(Service):
                             type=HopMessage.STATUS,
                             status=pb_status,
                         )
-                        await stream.write(response.SerializeToString())
+                        await stream.write(encode_message(response.SerializeToString()))
                         await trio.sleep(0.5)  # Longer wait to ensure message is sent
-                        return
-                    if len(msg_bytes) > MAX_MESSAGE_SIZE:
-                        await self._send_status(
-                            stream,
-                            StatusCode.MALFORMED_MESSAGE,
-                            "Message exceeds maximum size",
-                        )
                         return
             except trio.TooSlowError:
                 logger.error(
@@ -370,7 +367,7 @@ class CircuitV2Protocol(Service):
                     type=HopMessage.STATUS,
                     status=pb_status,
                 )
-                await stream.write(response.SerializeToString())
+                await stream.write(encode_message(response.SerializeToString()))
                 await trio.sleep(0.5)  # Longer wait to ensure the message is sent
                 return
             except Exception as e:
@@ -388,7 +385,7 @@ class CircuitV2Protocol(Service):
                     type=HopMessage.STATUS,
                     status=pb_status,
                 )
-                await stream.write(response.SerializeToString())
+                await stream.write(encode_message(response.SerializeToString()))
                 await trio.sleep(0.5)  # Longer wait to ensure the message is sent
                 return
 
@@ -411,7 +408,7 @@ class CircuitV2Protocol(Service):
                     type=HopMessage.STATUS,
                     status=pb_status,
                 )
-                await stream.write(response.SerializeToString())
+                await stream.write(encode_message(response.SerializeToString()))
                 await trio.sleep(0.5)  # Longer wait to ensure the message is sent
                 return
 
@@ -458,16 +455,8 @@ class CircuitV2Protocol(Service):
         try:
             # Read the incoming message with timeout
             with trio.fail_after(STREAM_READ_TIMEOUT):
-                msg_bytes = await stream.read(MAX_MESSAGE_SIZE + 1)
+                msg_bytes = await read_message(stream)
                 stop_msg = StopMessage()
-                if len(msg_bytes) > MAX_MESSAGE_SIZE:
-                    await self._send_stop_status(
-                        stream,
-                        StatusCode.MALFORMED_MESSAGE,
-                        "Message exceeds maximum size",
-                    )
-                    await self._close_stream(stream)
-                    return
                 stop_msg.ParseFromString(msg_bytes)
 
             if stop_msg.type != StopMessage.CONNECT:
@@ -615,7 +604,7 @@ class CircuitV2Protocol(Service):
                     type=HopMessage.STATUS,
                     status=status,
                 )
-                await stream.write(status_msg.SerializeToString())
+                await stream.write(encode_message(status_msg.SerializeToString()))
                 return
 
             # Accept reservation
@@ -653,7 +642,7 @@ class CircuitV2Protocol(Service):
                 )
 
                 # Send the response with increased timeout
-                await stream.write(response.SerializeToString())
+                await stream.write(encode_message(response.SerializeToString()))
 
                 # Add a small wait to ensure the message is fully sent
                 await trio.sleep(0.1)
@@ -770,10 +759,10 @@ class CircuitV2Protocol(Service):
                         data=self.limits.data,
                     ),
                 )
-                await dst_stream.write(stop_msg.SerializeToString())
+                await dst_stream.write(encode_message(stop_msg.SerializeToString()))
 
                 # Wait for response from destination
-                resp_bytes = await dst_stream.read()
+                resp_bytes = await read_message(dst_stream)
                 resp = StopMessage()
                 resp.ParseFromString(resp_bytes)
 
@@ -950,7 +939,7 @@ class CircuitV2Protocol(Service):
                 msg_bytes = status_msg.SerializeToString()
                 logger.debug("Status message serialized (%d bytes)", len(msg_bytes))
 
-                await stream.write(msg_bytes)
+                await stream.write(encode_message(msg_bytes))
                 logger.debug("Status message sent, waiting for processing")
 
                 # Wait longer to ensure the message is sent
@@ -984,7 +973,7 @@ class CircuitV2Protocol(Service):
                     type=StopMessage.STATUS,
                     status=pb_status,
                 )
-                await stream.write(status_msg.SerializeToString())
+                await stream.write(encode_message(status_msg.SerializeToString()))
                 await trio.sleep(0.5)  # Ensure message is sent
         except Exception as e:
             logger.error("Error sending stop status message: %s", str(e))

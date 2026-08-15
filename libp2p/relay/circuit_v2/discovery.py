@@ -33,6 +33,10 @@ from libp2p.tools.async_service import (
     Service,
 )
 
+from .framing import (
+    encode_message,
+    read_message,
+)
 from .pb.circuit_pb2 import (
     HopMessage,
 )
@@ -397,10 +401,10 @@ class RelayDiscovery(Service):
                 request = HopMessage(type=HopMessage.RESERVE)
 
                 with trio.fail_after(STREAM_TIMEOUT):
-                    await stream.write(request.SerializeToString())
+                    await stream.write(encode_message(request.SerializeToString()))
 
                     # Wait for response
-                    response_bytes = await stream.read()
+                    response_bytes = await read_message(stream)
                     if not response_bytes:
                         logger.error("No response received from relay %s", peer_id)
                         return False

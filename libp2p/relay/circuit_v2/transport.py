@@ -38,6 +38,10 @@ from .config import (
 from .discovery import (
     RelayDiscovery,
 )
+from .framing import (
+    encode_message,
+    read_message,
+)
 from .pb.circuit_pb2 import (
     HopMessage,
     Peer,
@@ -221,10 +225,10 @@ class CircuitV2Transport(ITransport):
                 type=HopMessage.CONNECT,
                 peer=Peer(id=peer_info.peer_id.to_bytes()),
             )
-            await relay_stream.write(hop_msg.SerializeToString())
+            await relay_stream.write(encode_message(hop_msg.SerializeToString()))
 
             # Read response
-            resp_bytes = await relay_stream.read()
+            resp_bytes = await read_message(relay_stream)
             resp = HopMessage()
             resp.ParseFromString(resp_bytes)
 
@@ -302,10 +306,10 @@ class CircuitV2Transport(ITransport):
         try:
             # Send reservation request
             reserve_msg = HopMessage(type=HopMessage.RESERVE)
-            await stream.write(reserve_msg.SerializeToString())
+            await stream.write(encode_message(reserve_msg.SerializeToString()))
 
             # Read response
-            resp_bytes = await stream.read()
+            resp_bytes = await read_message(stream)
             resp = HopMessage()
             resp.ParseFromString(resp_bytes)
 
@@ -417,7 +421,7 @@ class CircuitV2Listener(Service, IListener):
 
         try:
             # Read STOP message
-            msg_bytes = await stream.read()
+            msg_bytes = await read_message(stream)
             stop_msg = StopMessage()
             stop_msg.ParseFromString(msg_bytes)
 
