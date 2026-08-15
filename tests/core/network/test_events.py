@@ -64,6 +64,31 @@ async def test_event_bus_filters_by_event_type():
 
 
 @pytest.mark.trio
+async def test_event_bus_preserves_order_and_applies_backpressure():
+    event_bus = EventBus()
+    events = await event_bus.subscribe(max_buffer_size=1)
+    first = EventConnected(FakeConn(FakeMuxedConn(ID(b"first"))))
+    second = EventDisconnected(FakeConn(FakeMuxedConn(ID(b"second"))))
+    published_second = trio.Event()
+
+    await event_bus.publish(first)
+
+    async def publish_second() -> None:
+        await event_bus.publish(second)
+        published_second.set()
+
+    async with trio.open_nursery() as nursery:
+        nursery.start_soon(publish_second)
+        await trio.sleep(0)
+        assert not published_second.is_set()
+
+        assert await events.receive() is first
+        await published_second.wait()
+        assert await events.receive() is second
+        nursery.cancel_scope.cancel()
+
+
+@pytest.mark.trio
 async def test_swarm_event_bus_emits_connection_and_stream_events(security_protocol):
     async with SwarmFactory.create_batch_and_listen(
         2, security_protocol=security_protocol
