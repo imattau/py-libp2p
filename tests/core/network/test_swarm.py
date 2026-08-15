@@ -16,6 +16,7 @@ from libp2p.network.exceptions import (
 from libp2p.network.swarm import (
     Swarm,
 )
+from libp2p.security.tls import TLS_PROTOCOL_ID
 from libp2p.tools.utils import (
     connect_swarm,
 )
@@ -174,6 +175,7 @@ def test_new_swarm_defaults_to_tcp():
     swarm = new_swarm()
     assert isinstance(swarm, Swarm)
     assert isinstance(swarm.transport, TCP)
+    assert TLS_PROTOCOL_ID in swarm.upgrader.security_multistream.transports
 
 
 def test_new_swarm_tcp_multiaddr_supported():
