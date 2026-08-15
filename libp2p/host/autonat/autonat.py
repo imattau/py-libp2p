@@ -88,14 +88,23 @@ class AutoNATService:
             request_bytes = await read_varint_prefixed_bytes(stream)
             request = Message()
             request.ParseFromString(request_bytes)
-            response = await self._handle_request(request)
+            remote_address = stream.get_remote_address()
+            if request.type == Message.DIAL and remote_address is None:
+                response = Message(type=Message.DIAL_RESPONSE)
+                response.dialResponse.status = Message.E_DIAL_REFUSED
+            else:
+                response = await self._handle_request(request, remote_address)
             await stream.write(encode_varint_prefixed(response.SerializeToString()))
         except Exception as e:
             logger.error("Error handling AutoNAT stream: %s", str(e))
         finally:
             await stream.close()
 
-    async def _handle_request(self, request: bytes | Message) -> Message:
+    async def _handle_request(
+        self,
+        request: bytes | Message,
+        remote_address: tuple[str, int] | None = None,
+    ) -> Message:
         """
         Process an AutoNAT protocol request.
 
@@ -104,6 +113,9 @@ class AutoNATService:
         request : Union[bytes, Message]
             The request data to be processed, either as raw bytes or a
             pre-parsed Message object.
+        remote_address : tuple[str, int] | None
+            The observed network address of the requesting peer, when
+            available.
 
         Returns
         -------
@@ -120,7 +132,7 @@ class AutoNATService:
             message = request
 
         if message.type == Message.DIAL:
-            response = await self._handle_dial(message)
+            response = await self._handle_dial(message, remote_address)
             return response
 
         # Handle unknown request type
@@ -128,7 +140,11 @@ class AutoNATService:
         response.dialResponse.status = Message.E_BAD_REQUEST
         return response
 
-    async def _handle_dial(self, message: Message) -> Message:
+    async def _handle_dial(
+        self,
+        message: Message,
+        remote_address: tuple[str, int] | None = None,
+    ) -> Message:
         """
         Process an AutoNAT dial request.
 
@@ -137,6 +153,9 @@ class AutoNATService:
         message : Message
             The dial request message containing peer information to test
             connectivity.
+        remote_address : tuple[str, int] | None
+            The observed network address of the requesting peer, when
+            available.
 
         Returns
         -------
@@ -155,9 +174,20 @@ class AutoNATService:
         addresses: list[Multiaddr] = []
         for raw_addr in peer.addrs:
             try:
-                addresses.append(Multiaddr(raw_addr.decode()))
+                address = Multiaddr(raw_addr.decode())
+                if remote_address is not None:
+                    address_ip = (
+                        address.value_for_protocol("ip4")
+                        or address.value_for_protocol("ip6")
+                    )
+                    if address_ip != remote_address[0]:
+                        continue
+                addresses.append(address)
             except (UnicodeDecodeError, ValueError):
                 logger.debug("ignoring invalid AutoNAT address for %s", peer_id)
+        if not addresses and remote_address is not None:
+            response.dialResponse.status = Message.E_DIAL_REFUSED
+            return response
         if addresses:
             self.peerstore.add_addrs(peer_id, addresses, 60_000)
         success = await self._try_dial(peer_id)
@@ -216,7 +246,7 @@ class AutoNATService:
 
         stream = await self.host.new_stream(server_peer_id, [AUTONAT_PROTOCOL_ID])
         try:
-            await stream.write(request.SerializeToString())
+            await stream.write(encode_varint_prefixed(request.SerializeToString()))
             response = Message()
             response.ParseFromString(await read_varint_prefixed_bytes(stream))
             success = response.type == Message.DIAL_RESPONSE and (

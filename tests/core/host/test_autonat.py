@@ -131,7 +131,8 @@ async def test_probe_sends_addresses_and_records_result():
         mock_stream = AsyncMock(spec=NetStream)
         response = Message(type=Message.DIAL_RESPONSE)
         response.dialResponse.status = Message.OK
-        mock_stream.read.return_value = response.SerializeToString()
+        encoded_response = encode_varint_prefixed(response.SerializeToString())
+        mock_stream.read.side_effect = [encoded_response[:1], encoded_response[1:]]
 
         with patch.object(
             host1, "new_stream", new_callable=AsyncMock, return_value=mock_stream
@@ -145,7 +146,8 @@ async def test_probe_sends_addresses_and_records_result():
         mock_new_stream.assert_awaited_once_with(
             host2.get_id(), [AUTONAT_PROTOCOL_ID]
         )
-        request = Message.FromString(mock_stream.write.call_args.args[0])
+        encoded_request = mock_stream.write.call_args.args[0]
+        request = Message.FromString(encoded_request[1:])
         assert request.dial.peer.id == host1.get_id().to_bytes()
         assert list(request.dial.peer.addrs) == [b"/ip4/127.0.0.1/tcp/4001"]
         mock_stream.close.assert_awaited_once()
@@ -176,6 +178,21 @@ async def test_handle_dial():
             assert response.type == Message.DIAL_RESPONSE
             assert response.dialResponse.status == Message.OK
             mock_try_dial.assert_called_once_with(peer_id)
+
+
+@pytest.mark.trio
+async def test_handle_dial_refuses_address_for_different_ip():
+    async with HostFactory.create_batch_and_listen(1) as hosts:
+        service = AutoNATService(hosts[0])
+        message = Message(type=Message.DIAL)
+        message.dial.peer.id = b"peer_id"
+        message.dial.peer.addrs.append(b"/ip4/198.51.100.1/tcp/4001")
+
+        with patch.object(service, "_try_dial", new_callable=AsyncMock) as dial:
+            response = await service._handle_dial(message, ("127.0.0.1", 4000))
+
+        assert response.dialResponse.status == Message.E_DIAL_REFUSED
+        dial.assert_not_awaited()
 
 
 @pytest.mark.trio
@@ -232,6 +249,7 @@ async def test_handle_stream():
         # Mock stream read/write and _handle_request
         encoded_request = encode_varint_prefixed(request.SerializeToString())
         mock_stream.read.side_effect = [encoded_request[:1], encoded_request[1:]]
+        mock_stream.get_remote_address.return_value = ("127.0.0.1", 4000)
         mock_stream.write.return_value = None
         autonat_service._handle_request = AsyncMock(return_value=response)
 
@@ -247,4 +265,16 @@ async def test_handle_stream():
         mock_stream.reset_mock()
         mock_stream.read.side_effect = StreamError("Stream error")
         await autonat_service.handle_stream(mock_stream)
+        mock_stream.close.assert_called_once()
+
+        # Requests without an observable remote address must be refused.
+        mock_stream.reset_mock()
+        mock_stream.read.side_effect = [encoded_request[:1], encoded_request[1:]]
+        mock_stream.get_remote_address.return_value = None
+        refused = Message(type=Message.DIAL_RESPONSE)
+        refused.dialResponse.status = Message.E_DIAL_REFUSED
+        await autonat_service.handle_stream(mock_stream)
+        mock_stream.write.assert_called_once_with(
+            encode_varint_prefixed(refused.SerializeToString())
+        )
         mock_stream.close.assert_called_once()
