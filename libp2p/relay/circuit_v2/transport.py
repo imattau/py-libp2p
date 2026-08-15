@@ -91,6 +91,7 @@ class CircuitV2Transport(ITransport):
             discovery_interval=config.discovery_interval,
             max_relays=config.max_relays,
         )
+        self._reservation_streams: dict[ID, INetStream] = {}
 
     async def dial(
         self,
@@ -159,7 +160,7 @@ class CircuitV2Transport(ITransport):
             if not relay_peer_id:
                 raise ConnectionError("No suitable relay found")
 
-        # Get a stream to the relay
+        reservation_stream: INetStream | None = None
         relay_stream = await self.host.new_stream(relay_peer_id, [PROTOCOL_ID])
         if not relay_stream:
             raise ConnectionError(f"Could not open stream to relay {relay_peer_id}")
@@ -172,6 +173,27 @@ class CircuitV2Transport(ITransport):
                     logger.warning(
                         "Failed to make reservation with relay %s", relay_peer_id
                     )
+                    await relay_stream.close()
+                    relay_stream = await self.host.new_stream(
+                        relay_peer_id, [PROTOCOL_ID]
+                    )
+                    if not relay_stream:
+                        raise ConnectionError(
+                            f"Could not open circuit stream to relay {relay_peer_id}"
+                        )
+                else:
+                    reservation_stream = relay_stream
+                    previous = self._reservation_streams.pop(relay_peer_id, None)
+                    if previous is not None:
+                        await previous.close()
+                    self._reservation_streams[relay_peer_id] = reservation_stream
+                    relay_stream = await self.host.new_stream(
+                        relay_peer_id, [PROTOCOL_ID]
+                    )
+                    if not relay_stream:
+                        raise ConnectionError(
+                            f"Could not open circuit stream to relay {relay_peer_id}"
+                        )
 
             # Send HOP CONNECT message
             hop_msg = HopMessage(
@@ -197,6 +219,9 @@ class CircuitV2Transport(ITransport):
 
         except Exception as e:
             await relay_stream.close()
+            if reservation_stream is not None:
+                self._reservation_streams.pop(relay_peer_id, None)
+                await reservation_stream.close()
             raise ConnectionError(f"Failed to establish relay connection: {str(e)}")
 
     async def _select_relay(self, peer_info: PeerInfo) -> ID | None:

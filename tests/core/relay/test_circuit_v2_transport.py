@@ -2,6 +2,10 @@
 
 import logging
 import time
+from unittest.mock import (
+    AsyncMock,
+    patch,
+)
 
 import pytest
 import trio
@@ -11,12 +15,19 @@ from libp2p.network.stream.exceptions import (
     StreamEOF,
     StreamReset,
 )
+from libp2p.peer.peerinfo import (
+    PeerInfo,
+)
 from libp2p.relay.circuit_v2.config import (
     RelayConfig,
 )
 from libp2p.relay.circuit_v2.discovery import (
     RelayDiscovery,
     RelayInfo,
+)
+from libp2p.relay.circuit_v2.pb.circuit_pb2 import (
+    HopMessage,
+    Status,
 )
 from libp2p.relay.circuit_v2.protocol import (
     CircuitV2Protocol,
@@ -116,6 +127,40 @@ async def test_circuit_v2_transport_initialization():
         assert hasattr(transport, "discovery"), (
             "Transport should have a discovery instance"
         )
+
+
+@pytest.mark.trio
+async def test_circuit_v2_transport_separates_reservation_and_connect_streams():
+    async with HostFactory.create_batch_and_listen(3) as hosts:
+        client_host, relay_host, target_host = hosts
+        protocol = CircuitV2Protocol(client_host, DEFAULT_RELAY_LIMITS, allow_hop=False)
+        transport = CircuitV2Transport(client_host, protocol, RelayConfig())
+        reservation_stream = AsyncMock()
+        circuit_stream = AsyncMock()
+        status = HopMessage(
+            type=HopMessage.STATUS,
+            status=Status(code=Status.OK),
+        ).SerializeToString()
+        reservation_stream.read.return_value = status
+        circuit_stream.read.return_value = status
+
+        with patch.object(
+            client_host,
+            "new_stream",
+            new_callable=AsyncMock,
+            side_effect=[reservation_stream, circuit_stream],
+        ) as new_stream:
+            connection = await transport.dial_peer_info(
+                PeerInfo(target_host.get_id(), []), relay_peer_id=relay_host.get_id()
+            )
+
+        assert connection.stream is circuit_stream
+        assert new_stream.await_count == 2
+        assert relay_host.get_id() in transport._reservation_streams
+        assert transport._reservation_streams[relay_host.get_id()] is reservation_stream
+        reservation_stream.close.assert_not_awaited()
+        assert reservation_stream.write.await_count == 1
+        assert circuit_stream.write.await_count == 1
 
 
 @pytest.mark.trio
