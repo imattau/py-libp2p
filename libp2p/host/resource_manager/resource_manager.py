@@ -451,6 +451,24 @@ class NullScope(ResourceScope):
     def done(self) -> None:
         return None
 
+    def peer_scope(self) -> "NullScope":
+        return self
+
+    def set_peer(self, peer_id: ID) -> None:
+        return None
+
+    def protocol_scope(self) -> "NullScope":
+        return self
+
+    def set_protocol(self, protocol_id: TProtocol) -> None:
+        return None
+
+    def service_scope(self) -> "NullScope":
+        return self
+
+    def set_service(self, service: str) -> None:
+        return None
+
 
 class NullResourceManager:
     def __init__(self) -> None:

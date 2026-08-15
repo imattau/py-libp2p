@@ -57,10 +57,10 @@ as the first step.
    management scopes, memory reservations with priority thresholds, scope spans,
    scoped statistics, rollback on failed reservations, and a null manager. ``new_host``
    and ``new_swarm`` accept an optional resource manager and expose it on the network.
+   Swarm connection and stream opens now reserve/release resources through the manager.
 
    Remaining parity work:
 
-   * Enforce connection and stream reservations inside the transport/swarm/muxer paths.
    * Add allowlist, per-peer/per-protocol/per-service limit configuration loaders, and
      autoscaled defaults.
    * Integrate relay-v2 resource accounting with the shared manager instead of only

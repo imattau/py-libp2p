@@ -121,6 +121,8 @@ class NetStream(INetStream):
         # For notification handling
         self._notify_lock = trio.Lock()
 
+        self.resource_scope = None
+
     def get_protocol(self) -> TProtocol | None:
         """
         :return: protocol id that stream runs on
@@ -249,6 +251,10 @@ class NetStream(INetStream):
         Remove stream from connection and notify listeners.
         This is called when the stream is fully closed or reset.
         """
+        if self.resource_scope is not None:
+            self.resource_scope.done()
+            self.resource_scope = None
+
         if hasattr(self.muxed_conn, "remove_stream"):
             remove_stream = getattr(self.muxed_conn, "remove_stream")
             await remove_stream(self)

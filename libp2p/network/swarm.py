@@ -19,6 +19,7 @@ from libp2p.custom_types import (
     StreamHandlerFn,
 )
 from libp2p.host.resource_manager import (
+    Direction,
     NullResourceManager,
 )
 from libp2p.io.abc import (
@@ -178,12 +179,18 @@ class Swarm(Service, INetworkService):
         :raises SwarmException: raised when an error occurs
         :return: network connection
         """
-        # Dial peer (connection to peer does not yet exist)
+        conn_scope = self.resource_manager.open_connection(
+            Direction.OUTBOUND,
+            use_fd=True,
+            endpoint=addr,
+        )
+        raw_conn = None
         # Transport dials peer (gets back a raw conn)
         try:
             raw_conn = await self.transport.dial(addr)
         except OpenConnectionError as error:
             logger.debug("fail to dial peer %s over base transport", peer_id)
+            conn_scope.done()
             raise SwarmException(
                 f"fail to open connection to peer {peer_id}"
             ) from error
@@ -197,22 +204,26 @@ class Swarm(Service, INetworkService):
         except SecurityUpgradeFailure as error:
             logger.debug("failed to upgrade security for peer %s", peer_id)
             await raw_conn.close()
+            conn_scope.done()
             raise SwarmException(
                 f"failed to upgrade security for peer {peer_id}"
             ) from error
 
         logger.debug("upgraded security for peer %s", peer_id)
+        conn_scope.set_peer(peer_id)
 
         try:
             muxed_conn = await self.upgrader.upgrade_connection(secured_conn, peer_id)
         except MuxerUpgradeFailure as error:
             logger.debug("failed to upgrade mux for peer %s", peer_id)
             await secured_conn.close()
+            conn_scope.done()
             raise SwarmException(f"failed to upgrade mux for peer {peer_id}") from error
 
         logger.debug("upgraded mux for peer %s", peer_id)
 
         swarm_conn = await self.add_conn(muxed_conn)
+        swarm_conn.resource_scope = conn_scope
 
         logger.debug("successfully dialed peer %s", peer_id)
 
@@ -258,6 +269,11 @@ class Swarm(Service, INetworkService):
             async def conn_handler(
                 read_write_closer: ReadWriteCloser, maddr: Multiaddr = maddr
             ) -> None:
+                conn_scope = self.resource_manager.open_connection(
+                    Direction.INBOUND,
+                    use_fd=True,
+                    endpoint=maddr,
+                )
                 raw_conn = RawConnection(read_write_closer, False)
 
                 # Per, https://discuss.libp2p.io/t/multistream-security/130, we first
@@ -267,10 +283,12 @@ class Swarm(Service, INetworkService):
                 except SecurityUpgradeFailure as error:
                     logger.debug("failed to upgrade security for peer at %s", maddr)
                     await raw_conn.close()
+                    conn_scope.done()
                     raise SwarmException(
                         f"failed to upgrade security for peer at {maddr}"
                     ) from error
                 peer_id = secured_conn.get_remote_peer()
+                conn_scope.set_peer(peer_id)
 
                 try:
                     muxed_conn = await self.upgrader.upgrade_connection(
@@ -279,12 +297,14 @@ class Swarm(Service, INetworkService):
                 except MuxerUpgradeFailure as error:
                     logger.debug("fail to upgrade mux for peer %s", peer_id)
                     await secured_conn.close()
+                    conn_scope.done()
                     raise SwarmException(
                         f"fail to upgrade mux for peer {peer_id}"
                     ) from error
                 logger.debug("upgraded mux for peer %s", peer_id)
 
-                await self.add_conn(muxed_conn)
+                swarm_conn = await self.add_conn(muxed_conn)
+                swarm_conn.resource_scope = conn_scope
                 logger.debug("successfully opened connection to peer %s", peer_id)
 
                 # NOTE: This is a intentional barrier to prevent from the handler

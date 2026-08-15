@@ -10,6 +10,9 @@ from libp2p.abc import (
     IMuxedStream,
     INetConn,
 )
+from libp2p.host.resource_manager import (
+    Direction,
+)
 from libp2p.network.stream.net_stream import (
     NetStream,
 )
@@ -42,6 +45,7 @@ class SwarmConn(INetConn):
         self.streams = set()
         self.event_closed = trio.Event()
         self.event_started = trio.Event()
+        self.resource_scope = None
         if hasattr(muxed_conn, "on_close"):
             logging.debug(f"Setting on_close for peer {muxed_conn.peer_id}")
             setattr(muxed_conn, "on_close", self._on_muxed_conn_closed)
@@ -107,6 +111,10 @@ class SwarmConn(INetConn):
         logging.debug(f"Notifying disconnection for peer {self.muxed_conn.peer_id}")
         await self._notify_disconnected()
 
+        if self.resource_scope is not None:
+            self.resource_scope.done()
+            self.resource_scope = None
+
     async def _handle_new_streams(self) -> None:
         self.event_started.set()
         async with trio.open_nursery() as nursery:
@@ -130,6 +138,12 @@ class SwarmConn(INetConn):
 
     async def _add_stream(self, muxed_stream: IMuxedStream) -> NetStream:
         net_stream = NetStream(muxed_stream)
+        direction = (
+            Direction.OUTBOUND if muxed_stream.is_initiator else Direction.INBOUND
+        )
+        net_stream.resource_scope = self.swarm.resource_manager.open_stream(
+            self.muxed_conn.peer_id, direction
+        )
         self.streams.add(net_stream)
         await self.swarm.notify_opened_stream(net_stream)
         return net_stream

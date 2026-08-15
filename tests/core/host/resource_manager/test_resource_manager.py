@@ -14,6 +14,8 @@ from libp2p.host.resource_manager.resource_manager import (
     ResourceManagerLimits,
 )
 from libp2p.peer.id import ID
+from libp2p.peer.peerinfo import info_from_p2p_addr
+from tests.utils.factories import HostFactory
 
 
 def peer(num: int) -> ID:
@@ -129,3 +131,52 @@ def test_new_host_uses_supplied_resource_manager():
     host = new_host(resource_manager=manager)
 
     assert host.get_network().resource_manager is manager
+
+
+@pytest.mark.trio
+async def test_swarm_connection_uses_resource_manager(security_protocol):
+    manager = ResourceManager(
+        ResourceManagerLimits(system=ResourceLimits(conns_outbound=1))
+    )
+    async with HostFactory.create_batch_and_listen(
+        3, security_protocol=security_protocol
+    ) as hosts:
+        hosts[0].get_network().resource_manager = manager
+
+        await hosts[0].connect(info_from_p2p_addr(hosts[1].get_addrs()[0]))
+
+        assert manager.system.stat().num_conns_outbound == 1
+
+        with pytest.raises(Exception):
+            await hosts[0].connect(info_from_p2p_addr(hosts[2].get_addrs()[0]))
+
+        assert manager.system.stat().num_conns_outbound == 1
+
+        await hosts[0].disconnect(hosts[1].get_id())
+
+        assert manager.system.stat().num_conns_outbound == 0
+
+
+@pytest.mark.trio
+async def test_swarm_stream_uses_resource_manager(security_protocol):
+    manager = ResourceManager(
+        ResourceManagerLimits(system=ResourceLimits(streams_outbound=1))
+    )
+    async with HostFactory.create_batch_and_listen(
+        2, security_protocol=security_protocol
+    ) as hosts:
+        hosts[0].get_network().resource_manager = manager
+        await hosts[0].connect(info_from_p2p_addr(hosts[1].get_addrs()[0]))
+
+        stream = await hosts[0].get_network().new_stream(hosts[1].get_id())
+
+        assert manager.system.stat().num_streams_outbound == 1
+
+        with pytest.raises(Exception):
+            await hosts[0].get_network().new_stream(hosts[1].get_id())
+
+        assert manager.system.stat().num_streams_outbound == 1
+
+        await stream.reset()
+
+        assert manager.system.stat().num_streams_outbound == 0
