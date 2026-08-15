@@ -157,6 +157,26 @@ async def test_handler_dials_remote_candidates_after_sync() -> None:
 
 
 @pytest.mark.trio
+async def test_handler_closes_stream_after_direct_dial_failure() -> None:
+    connect = HolePunch(type=HolePunch.CONNECT, ObsAddrs=[ADDR.to_bytes()])
+    sync = HolePunch(type=HolePunch.SYNC)
+    stream = MemoryStream(
+        encode_varint_prefixed(connect.SerializeToString())
+        + encode_varint_prefixed(sync.SerializeToString())
+    )
+
+    class Network:
+        async def dial_peer_direct(self, peer_id, addresses) -> None:
+            raise RuntimeError("direct dial failed")
+
+    service = HolePunchService(FakeHost(stream, Network()))
+
+    await service.handle_stream(stream)
+
+    assert stream.closed
+
+
+@pytest.mark.trio
 async def test_connect_rejects_concurrent_upgrade() -> None:
     service = HolePunchService(FakeHost(MemoryStream()))
     service._upgrading.add(b"peer")

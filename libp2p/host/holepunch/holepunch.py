@@ -152,6 +152,8 @@ class HolePunchService:
                     await dial_peer_direct(peer_id, direct_addresses)
         except (HolePunchProtocolError, EOFError, trio.TooSlowError) as error:
             logger.debug("invalid DCUtR stream: %s", error)
+        except Exception as error:
+            logger.debug("DCUtR direct dial failed: %s", error, exc_info=error)
         finally:
             await stream.close()
 
