@@ -43,6 +43,7 @@ async def test_autonat_service_initialization():
         assert service.dial_results == {}
         assert service.host == host
         assert service.peerstore == host.get_peerstore()
+        assert AUTONAT_PROTOCOL_ID in host.get_mux().handlers
 
 
 @pytest.mark.trio

@@ -1,5 +1,7 @@
 import logging
 
+from multiaddr import Multiaddr
+
 from libp2p.custom_types import (
     TProtocol,
 )
@@ -69,6 +71,7 @@ class AutoNATService:
         self.peerstore: IPeerStore = host.get_peerstore()
         self.status = AutoNATStatus.UNKNOWN
         self.dial_results: dict[ID, bool] = {}
+        host.set_stream_handler(AUTONAT_PROTOCOL_ID, self.handle_stream)
 
     async def handle_stream(self, stream: NetStream) -> None:
         """
@@ -151,6 +154,14 @@ class AutoNATService:
 
         for peer in message.dial.peers:
             peer_id = ID(peer.id)
+            addresses: list[Multiaddr] = []
+            for raw_addr in peer.addrs:
+                try:
+                    addresses.append(Multiaddr(raw_addr.decode()))
+                except (UnicodeDecodeError, ValueError):
+                    logger.debug("ignoring invalid AutoNAT address for %s", peer_id)
+            if addresses:
+                self.peerstore.add_addrs(peer_id, addresses, 60_000)
             if peer_id in self.dial_results:
                 success = self.dial_results[peer_id]
             else:
