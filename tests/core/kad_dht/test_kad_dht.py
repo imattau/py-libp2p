@@ -131,6 +131,17 @@ async def test_put_and_get_value(dht_pair: tuple[KadDHT, KadDHT]):
 
 
 @pytest.mark.trio
+async def test_empty_value_round_trip(dht_pair: tuple[KadDHT, KadDHT]):
+    """Empty byte values are distinct from missing values."""
+    dht_a, dht_b = dht_pair
+    key = create_key_from_binary(b"empty-value-key")
+
+    await dht_a.put_value(key, b"")
+
+    assert await dht_b.get_value(key) == b""
+
+
+@pytest.mark.trio
 async def test_provide_and_find_providers(dht_pair: tuple[KadDHT, KadDHT]):
     """Test advertising and finding content providers."""
     dht_a, dht_b = dht_pair

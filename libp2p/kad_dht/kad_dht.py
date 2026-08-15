@@ -361,7 +361,7 @@ class KadDHT(Service):
                     logger.debug(f"Received GET_VALUE request for key {key.hex()}")
 
                     value = self.value_store.get(key)
-                    if value:
+                    if value is not None:
                         logger.debug(f"Found value for key {key.hex()}")
 
                         # Create response using protobuf
@@ -533,7 +533,7 @@ class KadDHT(Service):
 
         # 1. Check local store first
         value = self.value_store.get(key)
-        if value:
+        if value is not None:
             logger.debug("Found value locally")
             return value
 

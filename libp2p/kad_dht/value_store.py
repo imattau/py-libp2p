@@ -273,7 +273,7 @@ class ValueStore:
                 if (
                     response.type == Message.MessageType.GET_VALUE
                     and response.HasField("record")
-                    and response.record.value
+                    and response.record.key == key
                 ):
                     logger.debug(
                         f"Received value for key {key.hex()} from peer {peer_id}"
