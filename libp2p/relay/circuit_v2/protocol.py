@@ -670,6 +670,15 @@ class CircuitV2Protocol(Service):
         destination_peer_id = ID(msg.peer.id)
         dst_stream: INetStream | None = None
 
+        if not self.resource_manager.has_reservation(destination_peer_id):
+            await self._send_status(
+                stream,
+                StatusCode.NO_RESERVATION,
+                "Destination has no active reservation",
+            )
+            await stream.reset()
+            return
+
         # Verify reservation if provided
         if msg.HasField("reservation"):
             if not self.resource_manager.verify_reservation(

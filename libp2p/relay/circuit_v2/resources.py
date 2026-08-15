@@ -256,8 +256,15 @@ class RelayResourceManager:
             True if the connection can be accepted
 
         """
+        self._clean_expired()
         reservation = self._reservations.get(peer_id)
         return reservation is not None and reservation.can_accept_connection()
+
+    def has_reservation(self, peer_id: ID) -> bool:
+        """Return whether a peer has a current relay reservation."""
+        self._clean_expired()
+        reservation = self._reservations.get(peer_id)
+        return reservation is not None and not reservation.is_expired()
 
     def _clean_expired(self) -> None:
         """Remove expired reservations."""
