@@ -24,7 +24,7 @@ Currently maintained by [@pacrob](https://github.com/pacrob), [@seetadev](https:
 
 py-libp2p aims for conformity with [the standard libp2p modules](https://libp2p.io/implementations/). Below is a breakdown of the modules we have developed, are developing, and may develop in the future.
 
-> Legend: ✅: Done  🛠️: In Progress/Usable  🌱 Prototype/Unstable  ❌: Missing
+> Legend: ✅: Done  🛠️: In Progress/Usable  🌱 Prototype/Unstable  ❌: Missing
 
 ______________________________________________________________________
 
@@ -33,10 +33,11 @@ ______________________________________________________________________
 | **Transport**                          | **Status** |                                     **Source**                                      |
 | -------------------------------------- | :--------: | :---------------------------------------------------------------------------------: |
 | **`libp2p-tcp`**                       |     ✅     | [source](https://github.com/libp2p/py-libp2p/blob/main/libp2p/transport/tcp/tcp.py) |
-| **`libp2p-quic`**                      |     🌱     |                                                                                     |
+| **`libp2p-quic`**                      |     ❌     |                                                                                     |
 | **`libp2p-websocket`**                 |     ❌     |                                                                                     |
 | **`libp2p-webrtc-browser-to-server`**  |     ❌     |                                                                                     |
 | **`libp2p-webrtc-private-to-private`** |     ❌     |                                                                                     |
+| **`libp2p-webtransport`**              |     ❌     |                                                                                     |
 
 ______________________________________________________________________
 
@@ -44,9 +45,10 @@ ______________________________________________________________________
 
 | **NAT Traversal**             | **Status** |
 | ----------------------------- | :--------: |
-| **`libp2p-circuit-relay-v2`** |     ❌     |
-| **`libp2p-autonat`**          |     ❌     |
+| **`libp2p-circuit-relay-v2`** |     🌱     |
+| **`libp2p-autonat`**          |     🌱     |
 | **`libp2p-hole-punching`**    |     ❌     |
+| **`libp2p-dcutr`**            |     ❌     |
 
 ______________________________________________________________________
 
@@ -54,7 +56,7 @@ ______________________________________________________________________
 
 | **Secure Communication** | **Status** |                                  **Source**                                   |
 | ------------------------ | :--------: | :---------------------------------------------------------------------------: |
-| **`libp2p-noise`**       |     🌱     | [source](https://github.com/libp2p/py-libp2p/tree/main/libp2p/security/noise) |
+| **`libp2p-noise`**       |     🛠️     | [source](https://github.com/libp2p/py-libp2p/tree/main/libp2p/security/noise) |
 | **`libp2p-tls`**         |     ❌     |                                                                               |
 
 ______________________________________________________________________
@@ -63,9 +65,9 @@ ______________________________________________________________________
 
 | **Discovery**        | **Status** |
 | -------------------- | :--------: |
-| **`bootstrap`**      |     ❌     |
+| **`bootstrap`**      |     ✅     |
 | **`random-walk`**    |     ❌     |
-| **`mdns-discovery`** |     ❌     |
+| **`mdns-discovery`** |     ✅     |
 | **`rendezvous`**     |     ❌     |
 
 ______________________________________________________________________
@@ -74,7 +76,15 @@ ______________________________________________________________________
 
 | **Peer Routing**     | **Status** |
 | -------------------- | :--------: |
-| **`libp2p-kad-dht`** |     ❌     |
+| **`libp2p-kad-dht`** |     🌱     |
+
+______________________________________________________________________
+
+### Content Routing
+
+| **Content Routing**  | **Status** |
+| -------------------- | :--------: |
+| **`content-routing`**|     ❌     |
 
 ______________________________________________________________________
 
@@ -89,10 +99,19 @@ ______________________________________________________________________
 
 ### Stream Muxers
 
-| **Stream Muxers**  | **Status** |                                         **Status**                                         |
-| ------------------ | :--------: | :----------------------------------------------------------------------------------------: |
-| **`libp2p-yamux`** |     🌱     |                                                                                            |
-| **`libp2p-mplex`** |     🛠️     | [source](https://github.com/libp2p/py-libp2p/blob/main/libp2p/stream_muxer/mplex/mplex.py) |
+| **Stream Muxers**  | **Status** |                                          **Source**                                          |
+| ------------------ | :--------: | :-----------------------------------------------------------------------------------------: |
+| **`libp2p-yamux`** |     ✅     | [source](https://github.com/libp2p/py-libp2p/blob/main/libp2p/stream_muxer/yamux/yamux.py)  |
+| **`libp2p-mplex`** |     🛠️     | [source](https://github.com/libp2p/py-libp2p/blob/main/libp2p/stream_muxer/mplex/mplex.py)  |
+
+______________________________________________________________________
+
+### Connection & Resource Management
+
+| **Management**                 | **Status** |
+| ------------------------------ | :--------: |
+| **`connection-manager`**       |     ❌     |
+| **`resource-manager`**         |     ❌     |
 
 ______________________________________________________________________
 
@@ -104,15 +123,27 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### General Purpose Utilities & Datatypes
+### Observability
 
-| **Utility/Datatype**  | **Status** |                                          **Source**                                          |
-| --------------------- | :--------: | :------------------------------------------------------------------------------------------: |
-| **`libp2p-ping`**     |     ✅     |         [source](https://github.com/libp2p/py-libp2p/blob/main/libp2p/host/ping.py)          |
-| **`libp2p-peer`**     |     ✅     |             [source](https://github.com/libp2p/py-libp2p/tree/main/libp2p/peer)              |
-| **`libp2p-identify`** |     ✅     | [source](https://github.com/libp2p/py-libp2p/blob/main/libp2p/identity/identify/identify.py) |
+| **Observability** | **Status** |
+| ----------------- | :--------: |
+| **`event-bus`**   |     🌱     |
+| **`metrics`**     |     ❌     |
 
 ______________________________________________________________________
+
+### General Purpose Utilities & Datatypes
+
+| **Utility/Datatype**   | **Status** |                                          **Source**                                          |
+| ---------------------- | :--------: | :------------------------------------------------------------------------------------------: |
+| **`libp2p-ping`**      |     ✅     |         [source](https://github.com/libp2p/py-libp2p/blob/main/libp2p/host/ping.py)          |
+| **`libp2p-peer`**      |     ✅     |             [source](https://github.com/libp2p/py-libp2p/tree/main/libp2p/peer)              |
+| **`libp2p-identify`**  |     ✅     | [source](https://github.com/libp2p/py-libp2p/blob/main/libp2p/identity/identify/identify.py) |
+| **`libp2p-identify-push`** |  ✅  | [source](https://github.com/libp2p/py-libp2p/blob/main/libp2p/identity/identify_push/identify_push.py) |
+
+______________________________________________________________________
+
+See the [development plan](docs/development_plan.rst) for the prioritized roadmap.
 
 ## Explanation of Basic Two Node Communication
 
