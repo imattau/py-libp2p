@@ -196,3 +196,5 @@ def test_tls_identity_exposes_protocol_and_certificate():
     assert TLS_PROTOCOL_ID == "/tls/1.0.0"
     assert identity.peer_id == peer_id_from_certificate(identity.certificate)
     assert identity.certificate_der
+    assert identity.certificate_pem.startswith(b"-----BEGIN CERTIFICATE-----")
+    assert identity.private_key_pem.startswith(b"-----BEGIN EC PRIVATE KEY-----")

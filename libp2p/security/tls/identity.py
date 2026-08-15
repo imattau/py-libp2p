@@ -1,7 +1,11 @@
 from dataclasses import dataclass
 
 from cryptography import x509
-from cryptography.hazmat.primitives.serialization import Encoding
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    NoEncryption,
+    PrivateFormat,
+)
 
 from libp2p.crypto.keys import KeyPair
 from libp2p.peer.id import ID
@@ -32,6 +36,18 @@ class TLSIdentity:
     @property
     def certificate_der(self) -> bytes:
         return self.certificate.public_bytes(Encoding.DER)
+
+    @property
+    def certificate_pem(self) -> bytes:
+        return self.certificate.public_bytes(Encoding.PEM)
+
+    @property
+    def private_key_pem(self) -> bytes:
+        return self.certificate_key.private_bytes(
+            Encoding.PEM,
+            PrivateFormat.TraditionalOpenSSL,
+            NoEncryption(),
+        )
 
     def verify_peer_certificate(self, certificate: x509.Certificate) -> ID:
         return peer_id_from_certificate(certificate)
