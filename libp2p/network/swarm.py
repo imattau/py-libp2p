@@ -121,6 +121,8 @@ class Swarm(Service, INetworkService):
         async with trio.open_nursery() as nursery:
             # Create a nursery for listener tasks.
             self.listener_nursery = nursery
+            if hasattr(self.transport, "nursery"):
+                self.transport.nursery = nursery
             self.event_listener_nursery_created.set()
             try:
                 await self.manager.wait_finished()

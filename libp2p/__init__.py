@@ -59,17 +59,22 @@ from libp2p.security.insecure.transport import (
     PLAINTEXT_PROTOCOL_ID,
     InsecureTransport,
 )
-from libp2p.security.noise.transport import PROTOCOL_ID as NOISE_PROTOCOL_ID
-from libp2p.security.noise.transport import Transport as NoiseTransport
+from libp2p.security.noise.transport import (
+    PROTOCOL_ID as NOISE_PROTOCOL_ID,
+    Transport as NoiseTransport,
+)
 import libp2p.security.secio.transport as secio
 from libp2p.stream_muxer.mplex.mplex import (
     MPLEX_PROTOCOL_ID,
     Mplex,
 )
 from libp2p.stream_muxer.yamux.yamux import (
+    PROTOCOL_ID as YAMUX_PROTOCOL_ID,
     Yamux,
 )
-from libp2p.stream_muxer.yamux.yamux import PROTOCOL_ID as YAMUX_PROTOCOL_ID
+from libp2p.transport.quic.transport import (
+    QuicTransport,
+)
 from libp2p.transport.tcp.tcp import (
     TCP,
 )
@@ -198,8 +203,10 @@ def new_swarm(
         addr = listen_addrs[0]
         if addr.__contains__("tcp"):
             transport = TCP()
+        elif addr.protocols()[-1].name == "quic-v1":
+            transport = QuicTransport(key_pair)
         elif addr.__contains__("quic"):
-            raise ValueError("QUIC not yet supported")
+            raise ValueError("unsupported QUIC protocol")
         else:
             raise ValueError(f"Unknown transport in listen_addrs: {listen_addrs}")
 
