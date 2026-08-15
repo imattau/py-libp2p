@@ -9,6 +9,24 @@ from libp2p.transport.webrtc.aiortc_engine import (
 )
 
 
+def test_register_data_channel_handler_uses_aiortc_event_name() -> None:
+    from libp2p.transport.webrtc.aiortc_engine import _register_data_channel_handler
+
+    class PeerConnection:
+        def __init__(self) -> None:
+            self.events: list[tuple[str, object]] = []
+
+        def on(self, event: str, handler: object) -> None:
+            self.events.append((event, handler))
+
+    peer_connection = PeerConnection()
+    handler = object()
+
+    _register_data_channel_handler(peer_connection, handler)
+
+    assert peer_connection.events == [("datachannel", handler)]
+
+
 @pytest.mark.trio
 async def test_engine_reports_missing_optional_dependency() -> None:
     if importlib.util.find_spec("aiortc") is not None:

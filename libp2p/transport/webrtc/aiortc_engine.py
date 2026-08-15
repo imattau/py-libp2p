@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Any
 
+import trio
+
 from .asyncio_bridge import AsyncioLoopThread
 from .connection import WebRTCConnection
 
@@ -121,6 +123,31 @@ class AiortcWebRTCEngine:
         """Register a Trio-facing callback for remotely-created channels."""
         peer_connection = self._require_peer_connection()
         await self.bridge.call(_register_data_channel_handler, peer_connection, handler)
+
+    async def accept_data_channel(self) -> WebRTCConnection:
+        """Wait for and adapt the next remotely-created data channel."""
+        receive, send = trio.open_memory_channel[WebRTCConnection](1)
+        trio_token = trio.lowlevel.current_trio_token()
+
+        async def adapt(channel: Any) -> None:
+            connection = WebRTCConnection(
+                channel,
+                self.bridge.call,
+                is_initiator=False,
+            )
+            await self.bridge.call(
+                _register_message_handler, channel, connection.on_message
+            )
+            await send.send(connection)
+
+        def on_channel(channel: Any) -> None:
+            trio.from_thread.run(adapt, channel, trio_token=trio_token)
+
+        await self.on_data_channel(on_channel)
+        try:
+            return await receive.receive()
+        finally:
+            await send.aclose()
 
     async def on_ice_candidate(self, handler: Any) -> None:
         """Register a callback for local trickle ICE candidates."""
