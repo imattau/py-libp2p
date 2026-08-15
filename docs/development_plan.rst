@@ -214,8 +214,13 @@ P6 — Observability & polish
     low. Risk: low.*
 
 21. **Legacy cleanup & alignment.**
-    Decide the fate of deprecated-in-upstream components (secio, plaintext/insecure,
-    mplex) and align defaults with go-libp2p (noise + tls + yamux + quic).
+    Defaults now advertise Noise and TLS security with Yamux multiplexing. Plaintext,
+    secio, and Mplex remain available only through explicit compatibility options.
+    TCP remains the default listener transport when no listen multiaddr is supplied;
+    QUIC is selected explicitly by a QUIC multiaddr.
+    *Status: native default alignment complete for the current scope; deprecation
+    policy and interop validation remain pending in P7. Effort remaining: low.
+    Risk: medium.*
 
 22. **Multi-connection connection-manager parity.**
     Revisit per-peer ranking and emergency memory-pressure trimming after the swarm

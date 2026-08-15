@@ -55,15 +55,10 @@ from libp2p.peer.id import (
 from libp2p.peer.peerstore import (
     PeerStore,
 )
-from libp2p.security.insecure.transport import (
-    PLAINTEXT_PROTOCOL_ID,
-    InsecureTransport,
-)
 from libp2p.security.noise.transport import (
     PROTOCOL_ID as NOISE_PROTOCOL_ID,
     Transport as NoiseTransport,
 )
-import libp2p.security.secio.transport as secio
 from libp2p.security.tls import (
     TLS_PROTOCOL_ID,
     TLSTransport,
@@ -130,13 +125,12 @@ def get_default_muxer() -> str:
 
 def create_yamux_muxer_option() -> TMuxerOptions:
     """
-    Returns muxer options with Yamux as the primary choice.
+    Returns muxer options with Yamux as the only advertised muxer.
 
     :return: Muxer options with Yamux first
     """
     return {
-        TProtocol(YAMUX_PROTOCOL_ID): Yamux,  # Primary choice
-        TProtocol(MPLEX_PROTOCOL_ID): Mplex,  # Fallback for compatibility
+        TProtocol(YAMUX_PROTOCOL_ID): Yamux,
     }
 
 
@@ -222,16 +216,13 @@ def new_swarm(
     # Generate X25519 keypair for Noise
     noise_key_pair = create_new_x25519_key_pair()
 
-    # Default security transports (using Noise as primary)
+    # Default security transports. Legacy plaintext and secio remain available
+    # through an explicit ``sec_opt`` but are not advertised by default.
     secure_transports_by_protocol: Mapping[TProtocol, ISecureTransport] = sec_opt or {
         NOISE_PROTOCOL_ID: NoiseTransport(
             key_pair, noise_privkey=noise_key_pair.private_key
         ),
         TLS_PROTOCOL_ID: TLSTransport(key_pair),
-        TProtocol(secio.ID): secio.Transport(key_pair),
-        TProtocol(PLAINTEXT_PROTOCOL_ID): InsecureTransport(
-            key_pair, peerstore=peerstore_opt
-        ),
     }
 
     # Use given muxer preference if provided, otherwise use global default
