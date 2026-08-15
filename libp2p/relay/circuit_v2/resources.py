@@ -12,12 +12,14 @@ import hashlib
 import os
 import time
 
+from libp2p.crypto.keys import PrivateKey
 from libp2p.peer.id import (
     ID,
 )
 
 # Import the protobuf definitions
 from .pb.circuit_pb2 import Reservation as PbReservation
+from .voucher import create_voucher
 
 
 @dataclass
@@ -33,7 +35,14 @@ class RelayLimits:
 class Reservation:
     """Represents a relay reservation."""
 
-    def __init__(self, peer_id: ID, limits: RelayLimits, resource_scope=None):
+    def __init__(
+        self,
+        peer_id: ID,
+        limits: RelayLimits,
+        resource_scope=None,
+        relay_id: ID | None = None,
+        private_key: PrivateKey | None = None,
+    ):
         """
         Initialize a new reservation.
 
@@ -45,6 +54,10 @@ class Reservation:
             The resource limits for this reservation
         resource_scope : ResourceScope, optional
             Shared resource scope held for the reservation
+        relay_id : ID, optional
+            The relay identity used to sign the voucher
+        private_key : PrivateKey, optional
+            The relay key used to sign the voucher
 
         """
         self.peer_id = peer_id
@@ -54,7 +67,11 @@ class Reservation:
         self.data_used = 0
         self.active_connections = 0
         self.resource_scope = resource_scope
-        self.voucher = self._generate_voucher()
+        self.voucher = (
+            create_voucher(relay_id, peer_id, int(self.expires_at), private_key)
+            if relay_id is not None and private_key is not None
+            else self._generate_voucher()
+        )
 
     def _generate_voucher(self) -> bytes:
         """
@@ -96,10 +113,6 @@ class Reservation:
 
     def to_proto(self) -> PbReservation:
         """Convert the reservation to its protobuf representation."""
-        # TODO: For production use, implement proper signature generation
-        # The signature should be created by signing the voucher with the
-        # peer's private key. The current implementation with an empty signature
-        # is intended for development and testing only.
         return PbReservation(
             expire=int(self.expires_at),
             voucher=self.voucher,
@@ -130,7 +143,13 @@ class RelayResourceManager:
     - Managing connection quotas
     """
 
-    def __init__(self, limits: RelayLimits, resource_manager=None):
+    def __init__(
+        self,
+        limits: RelayLimits,
+        resource_manager=None,
+        relay_id: ID | None = None,
+        private_key: PrivateKey | None = None,
+    ):
         """
         Initialize the resource manager.
 
@@ -140,10 +159,16 @@ class RelayResourceManager:
             The resource limits to enforce
         resource_manager : ResourceManager, optional
             Shared host resource manager for relay accounting
+        relay_id : ID, optional
+            The relay identity used to sign reservation vouchers
+        private_key : PrivateKey, optional
+            The relay key used to sign reservation vouchers
 
         """
         self.limits = limits
         self.resource_manager = resource_manager
+        self.relay_id = relay_id
+        self.private_key = private_key
         self._reservations: dict[ID, Reservation] = {}
 
     def _new_resource_scope(self):
@@ -204,7 +229,13 @@ class RelayResourceManager:
         """
         scope = self._new_resource_scope()
         try:
-            reservation = Reservation(peer_id, self.limits, scope)
+            reservation = Reservation(
+                peer_id,
+                self.limits,
+                scope,
+                self.relay_id,
+                self.private_key,
+            )
             self._reservations[peer_id] = reservation
             return reservation
         except Exception:

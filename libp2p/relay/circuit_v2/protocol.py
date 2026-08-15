@@ -51,7 +51,6 @@ from .pb.circuit_pb2 import (
     HopMessage,
     Limit,
     Peer,
-    Reservation,
     Status as PbStatus,
     StopMessage,
 )
@@ -145,7 +144,10 @@ class CircuitV2Protocol(Service):
         host_network = host.get_network()
         shared_resource_manager = getattr(host_network, "resource_manager", None)
         self.resource_manager = RelayResourceManager(
-            self.limits, shared_resource_manager
+            self.limits,
+            shared_resource_manager,
+            relay_id=host.get_id(),
+            private_key=host.get_private_key(),
         )
         self._active_relays: dict[
             tuple[ID, ID], tuple[INetStream, INetStream | None]
@@ -618,15 +620,14 @@ class CircuitV2Protocol(Service):
                     code=StatusCode.OK, message="Reservation accepted"
                 )
 
+                reservation_proto = reservation.to_proto()
+                reservation_proto.addrs.extend(
+                    addr.to_bytes() for addr in self.host.get_addrs()
+                )
                 response = HopMessage(
                     type=HopMessage.STATUS,
                     status=status,
-                    reservation=Reservation(
-                        expire=int(reservation.expires_at),
-                        addrs=[addr.to_bytes() for addr in self.host.get_addrs()],
-                        voucher=reservation.voucher,
-                        signature=b"",  # Signature envelopes are not implemented yet
-                    ),
+                    reservation=reservation_proto,
                     limit=Limit(
                         duration=self.limits.duration,
                         data=self.limits.data,
