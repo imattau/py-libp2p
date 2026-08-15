@@ -728,6 +728,10 @@ class CircuitV2Protocol(Service):
                 stream,
                 StatusCode.OK,
                 "Connection established",
+                limit=Limit(
+                    duration=self.limits.duration,
+                    data=self.limits.data,
+                ),
             )
 
             # Start relaying data
@@ -856,6 +860,7 @@ class CircuitV2Protocol(Service):
         stream: ReadWriteCloser,
         code: int,
         message: str,
+        limit: Limit | None = None,
     ) -> None:
         """Send a status message."""
         try:
@@ -872,6 +877,8 @@ class CircuitV2Protocol(Service):
                     type=HopMessage.STATUS,
                     status=pb_status,
                 )
+                if limit is not None:
+                    status_msg.limit.CopyFrom(limit)
 
                 msg_bytes = status_msg.SerializeToString()
                 logger.debug("Status message serialized (%d bytes)", len(msg_bytes))
