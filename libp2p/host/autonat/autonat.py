@@ -81,6 +81,7 @@ class AutoNATService:
         self.peerstore: IPeerStore = host.get_peerstore()
         self.status = AutoNATStatus.UNKNOWN
         self.dial_results: dict[ID, bool] = {}
+        self.observed_addrs: set[Multiaddr] = set()
         self._dial_limiter = trio.CapacityLimiter(MAX_CONCURRENT_DIALS)
         host.set_stream_handler(AUTONAT_PROTOCOL_ID, self.handle_stream)
 
@@ -283,6 +284,16 @@ class AutoNATService:
             success = response.type == Message.DIAL_RESPONSE and (
                 response.dialResponse.status == Message.OK
             )
+            if success and response.dialResponse.addr:
+                try:
+                    observed_addr = Multiaddr(response.dialResponse.addr)
+                except (TypeError, ValueError):
+                    logger.debug("Ignoring invalid AutoNAT observed address")
+                else:
+                    self.observed_addrs.add(observed_addr)
+                    self.peerstore.add_addrs(
+                        self.host.get_id(), [observed_addr], 60_000
+                    )
             self.dial_results[server_peer_id] = success
             self.update_status()
             return success

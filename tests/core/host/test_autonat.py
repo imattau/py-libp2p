@@ -141,6 +141,9 @@ async def test_probe_sends_addresses_and_records_result():
         mock_stream = AsyncMock(spec=NetStream)
         response = Message(type=Message.DIAL_RESPONSE)
         response.dialResponse.status = Message.OK
+        response.dialResponse.addr = Multiaddr(
+            "/ip4/203.0.113.10/tcp/4001"
+        ).to_bytes()
         encoded_response = encode_varint_prefixed(response.SerializeToString())
         mock_stream.read.side_effect = [encoded_response[:1], encoded_response[1:]]
 
@@ -162,6 +165,9 @@ async def test_probe_sends_addresses_and_records_result():
         assert list(request.dial.peer.addrs) == [
             Multiaddr("/ip4/127.0.0.1/tcp/4001").to_bytes()
         ]
+        observed_addr = Multiaddr("/ip4/203.0.113.10/tcp/4001")
+        assert observed_addr in service.observed_addrs
+        assert observed_addr in service.peerstore.addrs(host1.get_id())
         mock_stream.close.assert_awaited_once()
 
 
