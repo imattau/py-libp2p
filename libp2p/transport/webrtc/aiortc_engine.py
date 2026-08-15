@@ -127,7 +127,7 @@ class AiortcWebRTCEngine:
 
     async def accept_data_channel(self) -> WebRTCConnection:
         """Wait for and adapt the next remotely-created data channel."""
-        receive, send = trio.open_memory_channel[WebRTCConnection](1)
+        send, receive = trio.open_memory_channel[WebRTCConnection](1)
         trio_token = trio.lowlevel.current_trio_token()
 
         async def adapt(channel: Any) -> None:
@@ -142,14 +142,22 @@ class AiortcWebRTCEngine:
             await self.bridge.call(_register_channel_lifecycle, channel, connection)
             await send.send(connection)
 
-        def on_channel(channel: Any) -> None:
-            trio.from_thread.run(adapt, channel, trio_token=trio_token)
+        async with trio.open_nursery() as nursery:
+            def on_channel(channel: Any) -> None:
+                trio.from_thread.run_sync(
+                    nursery.start_soon,
+                    adapt,
+                    channel,
+                    trio_token=trio_token,
+                )
 
-        await self.on_data_channel(on_channel)
-        try:
-            return await receive.receive()
-        finally:
-            await send.aclose()
+            await self.on_data_channel(on_channel)
+            try:
+                connection = await receive.receive()
+            finally:
+                nursery.cancel_scope.cancel()
+                await send.aclose()
+        return connection
 
     async def on_ice_candidate(self, handler: Any) -> None:
         """Register a callback for local trickle ICE candidates."""

@@ -1,12 +1,14 @@
 import importlib.util
 
 import pytest
+import trio
 
 from libp2p.transport.webrtc.aiortc_engine import (
     AiortcWebRTCEngine,
     WebRTCDependencyError,
     _candidate_from_data,
 )
+from libp2p.transport.webrtc.connection import WebRTCConnection
 
 
 def test_register_data_channel_handler_uses_aiortc_event_name() -> None:
@@ -68,3 +70,42 @@ def test_candidate_from_data_maps_browser_candidate_fields() -> None:
         "relatedPort": 5001,
         "tcpType": None,
     }
+
+
+@pytest.mark.trio
+async def test_aiortc_engine_exchanges_framed_data_channel_messages() -> None:
+    if importlib.util.find_spec("aiortc") is None:
+        pytest.skip("aiortc is not installed")
+
+    first = AiortcWebRTCEngine()
+    second = AiortcWebRTCEngine()
+    try:
+        await first.start()
+        await second.start()
+        outbound = await first.create_data_channel(True)
+        offer = await first.create_offer()
+        received = trio.Event()
+        holder: dict[str, WebRTCConnection] = {}
+
+        async def accept() -> None:
+            holder["connection"] = await second.accept_data_channel()
+            received.set()
+
+        async with trio.open_nursery() as nursery:
+            nursery.start_soon(accept)
+            await trio.sleep(0.1)
+            await second.set_remote_description(offer)
+            answer = await second.create_answer()
+            await first.set_remote_description(answer)
+            with trio.fail_after(10):
+                await received.wait()
+            inbound = holder["connection"]
+            await outbound.wait_ready()
+            await inbound.wait_ready()
+            await outbound.write(b"hello over aiortc")
+            with trio.fail_after(10):
+                assert await inbound.read() == b"hello over aiortc"
+            nursery.cancel_scope.cancel()
+    finally:
+        await first.close()
+        await second.close()
