@@ -35,7 +35,8 @@ class QuicListener(IListener):
 
     async def listen(self, maddr: Multiaddr, nursery: trio.Nursery) -> bool:
         if not any(
-            protocol.name == QUIC_V1_MULTIADDR_PROTOCOL for protocol in maddr.protocols()
+            protocol.name == QUIC_V1_MULTIADDR_PROTOCOL
+            for protocol in maddr.protocols()
         ):
             return False
         host = maddr.value_for_protocol("ip4")
@@ -44,7 +45,9 @@ class QuicListener(IListener):
             return False
 
         try:
-            socket = await TrioQuicDatagramSocket.bind(host, int(port))
+            socket = await TrioQuicDatagramSocket.bind(
+                host, int(port), reuse_port=True
+            )
         except (OSError, ValueError):
             return False
 

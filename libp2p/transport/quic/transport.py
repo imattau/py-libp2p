@@ -34,6 +34,25 @@ class QuicTransport(ITransport):
             self.nursery,
         )
 
+    async def dial_hole_punch(
+        self, maddr: Multiaddr, local_maddr: Multiaddr
+    ) -> IRawConnection:
+        if self.nursery is None:
+            raise RuntimeError("QuicTransport.dial requires a Trio nursery")
+        if not _is_quic_v1(maddr):
+            raise ValueError(f"not a QUIC v1 multiaddr: {maddr}")
+        local_host = local_maddr.value_for_protocol("ip4")
+        local_port = local_maddr.value_for_protocol("udp")
+        if local_host is None or local_port is None:
+            raise ValueError(f"invalid local QUIC multiaddr: {local_maddr}")
+        return await QuicDialer().dial_hole_punch(
+            maddr,
+            self.key_pair,
+            self.nursery,
+            (local_host, int(local_port)),
+            expected_peer_id=None,
+        )
+
     def create_listener(self, handler_function: THandler) -> IListener:
         return QuicListener(handler_function, self.key_pair)
 

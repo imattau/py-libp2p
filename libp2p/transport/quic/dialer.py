@@ -21,8 +21,12 @@ class QuicDialer:
         nursery: trio.Nursery,
         config: QuicTransportConfig | None = None,
         expected_peer_id: ID | None = None,
+        local_address: tuple[str, int] | None = None,
     ) -> QuicConnectionAdapter:
-        socket = await TrioQuicDatagramSocket.bind("127.0.0.1", 0)
+        local_host, local_port = local_address or ("127.0.0.1", 0)
+        socket = await TrioQuicDatagramSocket.bind(
+            local_host, local_port, reuse_port=local_address is not None
+        )
         connection = create_quic_connection(is_client=True, key_pair=key_pair)
         connection.connect((host, port), trio.current_time())
         adapter = QuicConnectionAdapter(connection, object())
@@ -42,6 +46,7 @@ class QuicDialer:
         nursery: trio.Nursery,
         config: QuicTransportConfig | None = None,
         expected_peer_id: ID | None = None,
+        local_address: tuple[str, int] | None = None,
     ) -> QuicConnectionAdapter:
         host = maddr.value_for_protocol("ip4")
         port = maddr.value_for_protocol("udp")
@@ -54,4 +59,23 @@ class QuicDialer:
             nursery,
             config,
             expected_peer_id,
+            local_address,
+        )
+
+    async def dial_hole_punch(
+        self,
+        maddr: Multiaddr,
+        key_pair: KeyPair,
+        nursery: trio.Nursery,
+        local_address: tuple[str, int],
+        config: QuicTransportConfig | None = None,
+        expected_peer_id: ID | None = None,
+    ) -> QuicConnectionAdapter:
+        return await self.dial_multiaddr(
+            maddr,
+            key_pair,
+            nursery,
+            config,
+            expected_peer_id,
+            local_address,
         )

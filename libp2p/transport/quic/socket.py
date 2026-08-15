@@ -16,8 +16,13 @@ class TrioQuicDatagramSocket(QuicDatagramSocket):
         cls,
         host: str,
         port: int,
+        *,
+        reuse_port: bool = False,
     ) -> "TrioQuicDatagramSocket":
         socket = trio.socket.socket(trio.socket.AF_INET, trio.socket.SOCK_DGRAM)
+        socket.setsockopt(trio.socket.SOL_SOCKET, trio.socket.SO_REUSEADDR, 1)
+        if reuse_port and hasattr(trio.socket, "SO_REUSEPORT"):
+            socket.setsockopt(trio.socket.SOL_SOCKET, trio.socket.SO_REUSEPORT, 1)
         await socket.bind((host, port))
         return cls(socket)
 
