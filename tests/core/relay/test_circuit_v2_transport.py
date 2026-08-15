@@ -140,12 +140,20 @@ async def test_circuit_v2_transport_separates_reservation_and_connect_streams():
         client_host, relay_host, target_host = hosts
         protocol = CircuitV2Protocol(client_host, DEFAULT_RELAY_LIMITS, allow_hop=False)
         transport = CircuitV2Transport(client_host, protocol, RelayConfig())
+        transport.discovery._discovered_relays[relay_host.get_id()] = RelayInfo(
+            peer_id=relay_host.get_id(),
+            discovered_at=time.time(),
+            last_seen=time.time(),
+        )
         reservation_stream = AsyncMock()
         circuit_stream = AsyncMock()
         status = encode_message(HopMessage(
             type=HopMessage.STATUS,
             status=Status(code=Status.OK),
-            reservation=Reservation(expire=int(time.time()) + 60),
+            reservation=Reservation(
+                expire=int(time.time()) + 60,
+                addrs=[Multiaddr("/ip4/127.0.0.1/tcp/4001").to_bytes()],
+            ),
         ).SerializeToString())
         reservation_stream.read.side_effect = [status[:1], status[1:]]
         circuit_stream.read.side_effect = [status[:1], status[1:]]
@@ -164,6 +172,9 @@ async def test_circuit_v2_transport_separates_reservation_and_connect_streams():
         assert new_stream.await_count == 2
         assert relay_host.get_id() in transport._reservation_streams
         assert transport._reservation_streams[relay_host.get_id()] is reservation_stream
+        relay_info = transport.discovery.get_relay_info(relay_host.get_id())
+        assert relay_info is not None
+        assert relay_info.reservation_addrs == (Multiaddr("/ip4/127.0.0.1/tcp/4001"),)
         reservation_stream.close.assert_not_awaited()
         assert reservation_stream.write.await_count == 1
         assert circuit_stream.write.await_count == 1

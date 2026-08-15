@@ -58,6 +58,15 @@ from .protocol_buffer import (
 logger = logging.getLogger("libp2p.relay.circuit_v2.transport")
 
 
+def _valid_multiaddr(raw_addr: bytes) -> bool:
+    """Return whether a reservation address can be parsed as a multiaddr."""
+    try:
+        multiaddr.Multiaddr(raw_addr)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
 class CircuitV2Transport(ITransport):
     """
     CircuitV2Transport implements the transport interface for Circuit Relay v2.
@@ -354,13 +363,17 @@ class CircuitV2Transport(ITransport):
                     resp.limit.data if resp.HasField("limit") else None
                 )
                 relay_info.reservation_voucher = reservation.voucher or None
+                relay_info.reservation_addrs = tuple(
+                    multiaddr.Multiaddr(raw_addr)
+                    for raw_addr in reservation.addrs
+                    if _valid_multiaddr(raw_addr)
+                )
 
             return True
 
         except Exception as e:
             logger.error("Error making reservation: %s", str(e))
             return False
-
     def create_listener(
         self,
         handler_function: Callable[[ReadWriteCloser], Awaitable[None]],
