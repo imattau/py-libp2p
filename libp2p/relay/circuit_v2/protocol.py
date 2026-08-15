@@ -78,6 +78,7 @@ STREAM_READ_TIMEOUT = 15  # seconds
 STREAM_WRITE_TIMEOUT = 15  # seconds
 STREAM_CLOSE_TIMEOUT = 10  # seconds
 MAX_READ_RETRIES = 5  # Maximum number of read retries
+MAX_MESSAGE_SIZE = 4096
 
 
 # Extended interfaces for type checking
@@ -330,7 +331,7 @@ class CircuitV2Protocol(Service):
                 with trio.fail_after(
                     STREAM_READ_TIMEOUT * 2
                 ):  # Double the timeout for reading
-                    msg_bytes = await stream.read()
+                    msg_bytes = await stream.read(MAX_MESSAGE_SIZE + 1)
                     if not msg_bytes:
                         logger.error(
                             "Empty read from stream from %s",
@@ -347,6 +348,13 @@ class CircuitV2Protocol(Service):
                         )
                         await stream.write(response.SerializeToString())
                         await trio.sleep(0.5)  # Longer wait to ensure message is sent
+                        return
+                    if len(msg_bytes) > MAX_MESSAGE_SIZE:
+                        await self._send_status(
+                            stream,
+                            StatusCode.MALFORMED_MESSAGE,
+                            "Message exceeds maximum size",
+                        )
                         return
             except trio.TooSlowError:
                 logger.error(
@@ -450,8 +458,16 @@ class CircuitV2Protocol(Service):
         try:
             # Read the incoming message with timeout
             with trio.fail_after(STREAM_READ_TIMEOUT):
-                msg_bytes = await stream.read()
+                msg_bytes = await stream.read(MAX_MESSAGE_SIZE + 1)
                 stop_msg = StopMessage()
+                if len(msg_bytes) > MAX_MESSAGE_SIZE:
+                    await self._send_stop_status(
+                        stream,
+                        StatusCode.MALFORMED_MESSAGE,
+                        "Message exceeds maximum size",
+                    )
+                    await self._close_stream(stream)
+                    return
                 stop_msg.ParseFromString(msg_bytes)
 
             if stop_msg.type != StopMessage.CONNECT:
