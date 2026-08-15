@@ -163,12 +163,18 @@ P4 — Discovery completeness
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 15. **Random-walk discovery.**
-    Random-walk is the default discovery primitive for DHT-based peer discovery.
-    *Effort: low. Risk: low. Depends on: kad-dht (P5).*
+    The native Trio implementation performs bounded random Kademlia lookups,
+    deduplicates addressable peers, and emits discovery events.
+    *Status: native implementation complete for the current scope; interop
+    pending in P7. Effort remaining: low. Risk: low. Depends on: kad-dht (P5).*
 
 16. **Rendezvous discovery.**
-    Implement ``/libp2p/rendezvous/1.0.0`` for rendezvous-based peer exchange.
-    *Effort: medium. Risk: low.*
+    The native Trio implementation now provides the ``/rendezvous/1.0.0``
+    protocol, signed peer-record validation, TTLs, namespace registration,
+    unregistration, discovery pagination, and client APIs. Interoperability
+    validation remains deferred to P7.
+    *Status: native implementation complete for the current scope; interop
+    pending in P7. Effort remaining: medium. Risk: medium.*
 
 P5 — Routing & storage
 ~~~~~~~~~~~~~~~~~~~~~~
