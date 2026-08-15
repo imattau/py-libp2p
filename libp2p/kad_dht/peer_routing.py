@@ -15,11 +15,16 @@ from libp2p.abc import (
     INetStream,
     IPeerRouting,
 )
+from libp2p.io.utils import read_exactly
 from libp2p.peer.id import (
     ID,
 )
 from libp2p.peer.peerinfo import (
     PeerInfo,
+)
+from libp2p.utils.varint import (
+    decode_uvarint_from_stream,
+    encode_varint_prefixed,
 )
 
 from .common import (
@@ -331,17 +336,8 @@ class PeerRouting(IPeerRouting):
 
         """
         try:
-            # Read message length
-            length_bytes = await stream.read(4)
-            if not length_bytes:
-                return
-
-            message_length = int.from_bytes(length_bytes, byteorder="big")
-
-            # Read message
-            message_bytes = await stream.read(message_length)
-            if not message_bytes:
-                return
+            message_length = await decode_uvarint_from_stream(stream)
+            message_bytes = await read_exactly(stream, message_length)
 
             # Parse protobuf message
             kad_message = Message()
@@ -378,8 +374,7 @@ class PeerRouting(IPeerRouting):
 
                     # Send response
                     response_bytes = response.SerializeToString()
-                    await stream.write(len(response_bytes).to_bytes(4, byteorder="big"))
-                    await stream.write(response_bytes)
+                    await stream.write(encode_varint_prefixed(response_bytes))
 
             except Exception as parse_err:
                 logger.error(f"Failed to parse protocol buffer message: {parse_err}")

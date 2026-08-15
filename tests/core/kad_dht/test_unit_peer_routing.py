@@ -311,7 +311,7 @@ class TestPeerRouting:
 
         # Mock stream reading
         mock_stream.read.side_effect = [
-            len(request_bytes).to_bytes(4, byteorder="big"),
+            varint.encode(len(request_bytes)),
             request_bytes,
         ]
 
@@ -330,6 +330,15 @@ class TestPeerRouting:
 
             # Should write response
             mock_stream.write.assert_called()
+            response_bytes = b"".join(
+                call.args[0] for call in mock_stream.write.call_args_list
+            )
+            response_length = varint.decode_bytes(response_bytes)
+            response = Message()
+            response.ParseFromString(
+                response_bytes[len(varint.encode(response_length)) :]
+            )
+            assert response.type == Message.MessageType.FIND_NODE
             mock_stream.close.assert_called_once()
 
     @pytest.mark.trio
@@ -339,7 +348,7 @@ class TestPeerRouting:
 
         # Mock stream to return invalid data
         mock_stream.read.side_effect = [
-            (10).to_bytes(4, byteorder="big"),
+            varint.encode(10),
             b"invalid_proto_data",
         ]
 
