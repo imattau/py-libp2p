@@ -150,9 +150,14 @@ The highest-impact end-user feature. Several pieces already exist as prototypes.
     in P7. Effort remaining: medium. Risk: medium.*
 
 14. **Hole punching + DCUtR.**
-    Implement the hole-punching service and ``/libp2p/dcutr`` on top of AutoNAT and
-    relay-v2. This completes the NAT-traversal story.
-    *Effort: high. Risk: high. Depends on: 12, 13.*
+    The native Trio service now implements bounded ``/libp2p/dcutr`` framing,
+    CONNECT/SYNC coordination, relay-event activation, RTT synchronization,
+    retries, and direct-connection replacement in the swarm. Remaining work is
+    transport-level TCP simultaneous-open socket reuse, QUIC hole-punch packet
+    handling, and P7 cross-implementation validation.
+    *Status: coordination and connection upgrade complete for the current scope;
+    transport hole punching and interop pending. Effort remaining: high. Risk:
+    high. Depends on: 12, 13.*
 
 P4 — Discovery completeness
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

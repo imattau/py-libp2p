@@ -42,7 +42,8 @@ Features in Development
 
 Several important features are currently being actively developed:
 
-* **NAT Traversal**: AutoNAT and relay-based hole punching under development
+* **NAT Traversal**: AutoNAT, circuit relay v2, and native DCUtR coordination;
+  transport-level hole punching and interoperability validation remain in progress
 * **WebSocket Transport**: Design and scoping discussions underway
 * **Peer Discovery**:
 
