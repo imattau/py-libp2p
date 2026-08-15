@@ -139,7 +139,7 @@ class CircuitV2Protocol(Service):
             self.limits, shared_resource_manager
         )
         self._active_relays: dict[
-            ID, tuple[INetStream, INetStream | None, ID]
+            tuple[ID, ID], tuple[INetStream, INetStream | None]
         ] = {}
         self.event_started = trio.Event()
 
@@ -162,7 +162,7 @@ class CircuitV2Protocol(Service):
             await self.manager.wait_finished()
         finally:
             # Clean up any active relay connections
-            for src_stream, dst_stream, _ in self._active_relays.values():
+            for src_stream, dst_stream in self._active_relays.values():
                 await self._close_stream(src_stream)
                 await self._close_stream(dst_stream)
             self._active_relays.clear()
@@ -450,7 +450,21 @@ class CircuitV2Protocol(Service):
                 await self._close_stream(stream)
                 return
             peer_id = ID(stop_msg.peer.id)
-            if peer_id not in self._active_relays:
+            try:
+                destination_peer_id = cast(
+                    INetStreamWithExtras, stream
+                ).get_remote_peer_id()
+            except Exception:
+                await self._send_stop_status(
+                    stream,
+                    StatusCode.MALFORMED_MESSAGE,
+                    "Missing authenticated destination peer ID",
+                )
+                await self._close_stream(stream)
+                return
+
+            relay_key = (peer_id, destination_peer_id)
+            if relay_key not in self._active_relays:
                 # Use direct attribute access to create status object for error response
                 await self._send_stop_status(
                     stream,
@@ -460,8 +474,8 @@ class CircuitV2Protocol(Service):
                 await self._close_stream(stream)
                 return
 
-            src_stream, _, destination_peer_id = self._active_relays[peer_id]
-            self._active_relays[peer_id] = (src_stream, stream, destination_peer_id)
+            src_stream, _ = self._active_relays[relay_key]
+            self._active_relays[relay_key] = (src_stream, stream)
 
             # Send success status to both sides
             await self._send_status(
@@ -489,7 +503,7 @@ class CircuitV2Protocol(Service):
                         src_stream,
                         stream,
                         destination_peer_id,
-                        peer_id,
+                        relay_key,
                         "source_to_destination",
                     )
                     nursery.start_soon(
@@ -497,7 +511,7 @@ class CircuitV2Protocol(Service):
                         stream,
                         src_stream,
                         destination_peer_id,
-                        peer_id,
+                        relay_key,
                         "destination_to_source",
                     )
             if relay_scope.cancelled_caught:
@@ -681,11 +695,8 @@ class CircuitV2Protocol(Service):
 
         try:
             # Store the source stream with properly typed None
-            self._active_relays[requester_peer_id] = (
-                stream,
-                None,
-                destination_peer_id,
-            )
+            relay_key = (requester_peer_id, destination_peer_id)
+            self._active_relays[relay_key] = (stream, None)
 
             # Try to connect to the destination with timeout
             with trio.fail_after(STREAM_READ_TIMEOUT):
@@ -723,11 +734,7 @@ class CircuitV2Protocol(Service):
                     )
 
             # Update active relays with destination stream
-            self._active_relays[requester_peer_id] = (
-                stream,
-                dst_stream,
-                destination_peer_id,
-            )
+            self._active_relays[relay_key] = (stream, dst_stream)
 
             # Update reservation connection count
             reservation = self.resource_manager._reservations.get(destination_peer_id)
@@ -752,8 +759,8 @@ class CircuitV2Protocol(Service):
                 StatusCode.CONNECTION_FAILED,
                 str(e),
             )
-            if requester_peer_id in self._active_relays:
-                del self._active_relays[requester_peer_id]
+            if relay_key in self._active_relays:
+                del self._active_relays[relay_key]
             # Clean up reservation connection count on failure
             await stream.reset()
             if dst_stream and not cast(INetStreamWithExtras, dst_stream).is_closed():
@@ -765,8 +772,8 @@ class CircuitV2Protocol(Service):
                 StatusCode.CONNECTION_FAILED,
                 "Internal error",
             )
-            if requester_peer_id in self._active_relays:
-                del self._active_relays[requester_peer_id]
+            if relay_key in self._active_relays:
+                del self._active_relays[relay_key]
             await stream.reset()
             if dst_stream and not cast(INetStreamWithExtras, dst_stream).is_closed():
                 await dst_stream.reset()
@@ -776,7 +783,7 @@ class CircuitV2Protocol(Service):
         src_stream: INetStream,
         dst_stream: INetStream,
         reservation_peer_id: ID,
-        active_relay_peer_id: ID,
+        active_relay_key: tuple[ID, ID],
         direction: str,
     ) -> None:
         """
@@ -790,8 +797,8 @@ class CircuitV2Protocol(Service):
             Destination stream to write to
         reservation_peer_id : ID
             ID of the reserved destination peer
-        active_relay_peer_id : ID
-            ID of the connection initiator used to match the STOP stream
+        active_relay_key : tuple[ID, ID]
+            Source and destination IDs used to match the STOP stream
         direction : str
             Directional data counter to apply to this relay leg
 
@@ -849,8 +856,8 @@ class CircuitV2Protocol(Service):
             with trio.CancelScope(shield=True):
                 await src_stream.reset()
                 await dst_stream.reset()
-                if active_relay_peer_id in self._active_relays:
-                    del self._active_relays[active_relay_peer_id]
+                if active_relay_key in self._active_relays:
+                    del self._active_relays[active_relay_key]
                     reservation = self.resource_manager._reservations.get(
                         reservation_peer_id
                     )
