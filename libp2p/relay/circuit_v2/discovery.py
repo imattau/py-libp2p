@@ -16,6 +16,7 @@ from typing import (
     runtime_checkable,
 )
 
+from multiaddr import Multiaddr
 import trio
 
 from libp2p.abc import (
@@ -73,6 +74,8 @@ class RelayInfo:
     reservation_expires_at: float | None = None
     reservation_data_limit: int | None = None
     reservation_stream: INetStream | None = None
+    reservation_addrs: tuple[Multiaddr, ...] = ()
+    reservation_voucher: bytes | None = None
 
 
 class RelayDiscovery(Service):
@@ -433,6 +436,19 @@ class RelayDiscovery(Service):
                                     response.reservation.expire
                                 )
                                 relay_info.reservation_data_limit = response.limit.data
+                                relay_info.reservation_voucher = (
+                                    response.reservation.voucher or None
+                                )
+                                reservation_addrs: list[Multiaddr] = []
+                                for raw_addr in response.reservation.addrs:
+                                    try:
+                                        reservation_addrs.append(Multiaddr(raw_addr))
+                                    except (TypeError, ValueError):
+                                        logger.warning(
+                                            "Ignoring invalid relay address from %s",
+                                            peer_id,
+                                        )
+                                relay_info.reservation_addrs = tuple(reservation_addrs)
 
                             logger.debug(
                                 "Successfully made reservation with relay %s", peer_id
@@ -491,6 +507,8 @@ class RelayDiscovery(Service):
                 relay_info.has_reservation = False
                 relay_info.reservation_expires_at = None
                 relay_info.reservation_data_limit = None
+                relay_info.reservation_addrs = ()
+                relay_info.reservation_voucher = None
                 if relay_info.reservation_stream is not None:
                     await relay_info.reservation_stream.close()
                     relay_info.reservation_stream = None
