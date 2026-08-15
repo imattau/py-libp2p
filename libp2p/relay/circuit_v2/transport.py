@@ -228,9 +228,16 @@ class CircuitV2Transport(ITransport):
             resp = HopMessage()
             resp.ParseFromString(resp_bytes)
 
+            if resp.type != HopMessage.STATUS or not resp.HasField("status"):
+                logger.warning(
+                    "Relay %s returned an invalid reservation response",
+                    relay_peer_id,
+                )
+                return False
+
             # Access status attributes directly
-            status_code = getattr(resp.status, "code", StatusCode.OK)
-            status_msg = getattr(resp.status, "message", "Unknown error")
+            status_code = resp.status.code
+            status_msg = resp.status.message
 
             if status_code != StatusCode.OK:
                 raise ConnectionError(f"Relay connection failed: {status_msg}")
