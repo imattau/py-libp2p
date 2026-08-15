@@ -58,15 +58,15 @@ as the first step.
    scoped statistics, rollback on failed reservations, and a null manager. ``new_host``
    and ``new_swarm`` accept an optional resource manager and expose it on the network.
    Swarm connection and stream opens now reserve/release resources through the manager.
+   The manager also supports allowlisted peers, per-peer/per-protocol/per-service
+   limit configuration, and autoscaled default limit sets.
 
    Remaining parity work:
 
-   * Add allowlist, per-peer/per-protocol/per-service limit configuration loaders, and
-     autoscaled defaults.
    * Integrate relay-v2 resource accounting with the shared manager instead of only
      using relay-local reservation counters.
    * Add metrics/trace reporting once the observability layer exists.
-   *Status: in progress. Effort remaining: high. Risk: medium. Depends on: connmgr.*
+   *Status: in progress. Effort remaining: medium. Risk: medium. Depends on: connmgr.*
 
 4. **Event bus and notifee alignment.**
    Promote connection/stream lifecycle notifications to a Go-style event surface so
@@ -84,9 +84,9 @@ as the first step.
    *Status: in progress. Effort remaining: low. Risk: low. Depends on: connmgr.*
 
 5. **Async model decision.**
-   Confirm whether the port continues on Trio or starts an asyncio migration before
-   adding more transport and service ports.
-   *Effort: medium. Risk: high.*
+   Continue the Go-parity port on Trio. An asyncio migration can be reconsidered as a
+   separate compatibility project, but it no longer blocks P0 implementation work.
+   *Status: done. Effort: none. Risk: accepted.*
 
 P1 — Interop validation harness
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

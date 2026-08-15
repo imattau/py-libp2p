@@ -102,6 +102,85 @@ def test_memory_priority_thresholds_are_enforced():
     assert manager.system.stat().memory == 60
 
 
+def test_resource_limits_load_from_config_and_autoscale():
+    limits = ResourceLimits.from_config(
+        {
+            "streams": 8,
+            "streams_inbound": 4,
+            "conns_outbound": 2,
+            "memory": 1024,
+        }
+    )
+
+    assert limits.streams == 8
+    assert limits.streams_inbound == 4
+    assert limits.conns_outbound == 2
+    assert limits.memory == 1024
+
+    scaled = ResourceManagerLimits.autoscaled(0.5)
+
+    assert scaled.system.conns == 512
+    assert scaled.transient.fd == 128
+    assert scaled.peer_default.streams == 128
+
+
+def test_resource_manager_limits_load_configured_scope_overrides():
+    protocol_id = TProtocol("/example/1.0.0")
+    peer_id = peer(1)
+    limits = ResourceManagerLimits.from_config(
+        {
+            "system": {"streams": 10, "conns": 4},
+            "service_default": {"streams": 5},
+            "services": {"identify": {"streams": 1}},
+            "protocols": {protocol_id: {"streams": 2}},
+            "peers": {peer_id: {"conns": 1}},
+        }
+    )
+    manager = ResourceManager(limits)
+
+    assert manager.system.limits.streams == 10
+    assert manager.system.limits.conns == 4
+    assert manager.get_service_scope("unknown").limits.streams == 5
+    assert manager.get_service_scope("identify").limits.streams == 1
+    assert manager.get_protocol_scope(protocol_id).limits.streams == 2
+    assert manager.get_peer_scope(peer_id).limits.conns == 1
+
+
+def test_allowlisted_peer_bypasses_peer_default_limits():
+    allowed_peer = peer(1)
+    manager = ResourceManager(
+        ResourceManagerLimits(
+            peer_default=ResourceLimits(conns=1),
+            allowlisted_peers=frozenset({allowed_peer}),
+        )
+    )
+
+    first = manager.open_connection(Direction.OUTBOUND, use_fd=False)
+    first.set_peer(allowed_peer)
+    second = manager.open_connection(Direction.OUTBOUND, use_fd=False)
+    second.set_peer(allowed_peer)
+
+    assert manager.get_peer_scope(allowed_peer).stat().num_conns == 2
+
+
+def test_allowlisted_peers_load_from_config():
+    peer_id = peer(1)
+    limits = ResourceManagerLimits.from_config(
+        {
+            "peer_default": {"conns": 1},
+            "allowlisted_peers": [peer_id.to_base58()],
+        }
+    )
+    manager = ResourceManager(limits)
+
+    first = manager.open_connection(Direction.OUTBOUND, use_fd=False)
+    first.set_peer(peer_id)
+    second = manager.open_connection(Direction.OUTBOUND, use_fd=False)
+    second.set_peer(peer_id)
+
+    assert manager.get_peer_scope(peer_id).stat().num_conns == 2
+
+
 def test_span_releases_resources_to_parent_on_done():
     manager = ResourceManager(ResourceManagerLimits(system=ResourceLimits(memory=100)))
 

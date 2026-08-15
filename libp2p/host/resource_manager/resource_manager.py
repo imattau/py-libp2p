@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
-from typing import TypeAlias
+from typing import Any, TypeAlias, TypeVar
 
 from multiaddr import Multiaddr
 
@@ -11,6 +11,7 @@ from libp2p.custom_types import TProtocol
 from libp2p.peer.id import ID
 
 RESERVATION_PRIORITY_ALWAYS = 255
+TKey = TypeVar("TKey")
 
 
 class LimitExceeded(Exception):
@@ -74,6 +75,39 @@ class ResourceLimits:
     conns_outbound: int | None = None
     fd: int | None = None
     memory: int | None = None
+
+    @classmethod
+    def from_config(cls, config: Mapping[str, int | None]) -> "ResourceLimits":
+        return cls(
+            streams=config.get("streams"),
+            streams_inbound=config.get("streams_inbound"),
+            streams_outbound=config.get("streams_outbound"),
+            conns=config.get("conns"),
+            conns_inbound=config.get("conns_inbound"),
+            conns_outbound=config.get("conns_outbound"),
+            fd=config.get("fd"),
+            memory=config.get("memory"),
+        )
+
+    def scale(self, factor: float) -> "ResourceLimits":
+        if factor <= 0:
+            raise ValueError("scale factor must be positive")
+
+        def scale_limit(limit: int | None) -> int | None:
+            if limit is None:
+                return None
+            return max(1, int(limit * factor))
+
+        return ResourceLimits(
+            streams=scale_limit(self.streams),
+            streams_inbound=scale_limit(self.streams_inbound),
+            streams_outbound=scale_limit(self.streams_outbound),
+            conns=scale_limit(self.conns),
+            conns_inbound=scale_limit(self.conns_inbound),
+            conns_outbound=scale_limit(self.conns_outbound),
+            fd=scale_limit(self.fd),
+            memory=scale_limit(self.memory),
+        )
 
     def check(self, stat: ScopeStat, *, priority: int) -> None:
         checks = (
@@ -339,6 +373,128 @@ class ResourceManagerLimits:
     services: dict[str, ResourceLimits] | None = None
     protocols: dict[TProtocol, ResourceLimits] | None = None
     peers: dict[ID, ResourceLimits] | None = None
+    allowlisted_peers: frozenset[ID] = frozenset()
+
+    @classmethod
+    def default(cls) -> "ResourceManagerLimits":
+        return cls(
+            system=ResourceLimits(
+                streams=4096,
+                streams_inbound=2048,
+                streams_outbound=2048,
+                conns=1024,
+                conns_inbound=512,
+                conns_outbound=512,
+                fd=1024,
+                memory=1 << 30,
+            ),
+            transient=ResourceLimits(
+                streams=1024,
+                streams_inbound=512,
+                streams_outbound=512,
+                conns=256,
+                conns_inbound=128,
+                conns_outbound=128,
+                fd=256,
+                memory=256 << 20,
+            ),
+            service_default=ResourceLimits(streams=1024, memory=256 << 20),
+            protocol_default=ResourceLimits(streams=1024, memory=256 << 20),
+            peer_default=ResourceLimits(
+                streams=256,
+                streams_inbound=128,
+                streams_outbound=128,
+                conns=16,
+                conns_inbound=8,
+                conns_outbound=8,
+                fd=16,
+                memory=64 << 20,
+            ),
+        )
+
+    @classmethod
+    def autoscaled(cls, factor: float) -> "ResourceManagerLimits":
+        defaults = cls.default()
+        return cls(
+            system=defaults.system.scale(factor),
+            transient=defaults.transient.scale(factor),
+            service_default=defaults.service_default.scale(factor),
+            protocol_default=defaults.protocol_default.scale(factor),
+            peer_default=defaults.peer_default.scale(factor),
+        )
+
+    @classmethod
+    def from_config(cls, config: Mapping[str, Any]) -> "ResourceManagerLimits":
+        base = (
+            cls.autoscaled(float(config["autoscale"]))
+            if "autoscale" in config
+            else cls()
+        )
+        return cls(
+            system=_limit_from_config(config, "system", base.system),
+            transient=_limit_from_config(config, "transient", base.transient),
+            service_default=_limit_from_config(
+                config, "service_default", base.service_default
+            ),
+            protocol_default=_limit_from_config(
+                config, "protocol_default", base.protocol_default
+            ),
+            peer_default=_limit_from_config(config, "peer_default", base.peer_default),
+            services=_limits_map_from_config(
+                config, "services", key_parser=str, defaults=base.services
+            ),
+            protocols=_limits_map_from_config(
+                config, "protocols", key_parser=TProtocol, defaults=base.protocols
+            ),
+            peers=_limits_map_from_config(
+                config, "peers", key_parser=_peer_id_from_config, defaults=base.peers
+            ),
+            allowlisted_peers=frozenset(
+                _peer_id_from_config(peer_id)
+                for peer_id in config.get(
+                    "allowlisted_peers", base.allowlisted_peers
+                )
+            ),
+        )
+
+
+def _limit_from_config(
+    config: Mapping[str, Any], key: str, default: ResourceLimits
+) -> ResourceLimits:
+    if key not in config:
+        return default
+    value = config[key]
+    if not isinstance(value, Mapping):
+        raise TypeError(f"{key} limits must be a mapping")
+    return ResourceLimits.from_config(value)
+
+
+def _limits_map_from_config(
+    config: Mapping[str, Any],
+    key: str,
+    *,
+    key_parser: Callable[[Any], TKey],
+    defaults: dict[TKey, ResourceLimits] | None,
+) -> dict[TKey, ResourceLimits] | None:
+    if key not in config:
+        return defaults
+    value = config[key]
+    if not isinstance(value, Mapping):
+        raise TypeError(f"{key} limits must be a mapping")
+    return {
+        key_parser(item_key): ResourceLimits.from_config(item_limits)
+        for item_key, item_limits in value.items()
+    }
+
+
+def _peer_id_from_config(peer_id: Any) -> ID:
+    if isinstance(peer_id, ID):
+        return peer_id
+    if isinstance(peer_id, bytes):
+        return ID(peer_id)
+    if isinstance(peer_id, str):
+        return ID.from_base58(peer_id)
+    raise TypeError("peer id must be an ID, bytes, or base58 string")
 
 
 class ResourceManager:
@@ -389,7 +545,11 @@ class ResourceManager:
 
     def get_peer_scope(self, peer_id: ID) -> PeerScope:
         if peer_id not in self._peers:
-            limits = (self.limits.peers or {}).get(peer_id, self.limits.peer_default)
+            limits = (
+                ResourceLimits()
+                if peer_id in self.limits.allowlisted_peers
+                else (self.limits.peers or {}).get(peer_id, self.limits.peer_default)
+            )
             self._peers[peer_id] = PeerScope(peer_id, limits, self.system)
         return self._peers[peer_id]
 
