@@ -37,8 +37,13 @@ def _websocket_params(maddr: Multiaddr) -> tuple[str, int, bool]:
 
 
 class WebSocketListener(IListener):
-    def __init__(self, handler_function: THandler) -> None:
+    def __init__(
+        self,
+        handler_function: THandler,
+        ssl_context: ssl.SSLContext | None = None,
+    ) -> None:
         self.handler = handler_function
+        self._configured_ssl_context = ssl_context
         self._server = None
         self._host = ""
         self._port = 0
@@ -47,7 +52,11 @@ class WebSocketListener(IListener):
     async def listen(self, maddr: Multiaddr, nursery: trio.Nursery) -> bool:
         host, port, secure = _websocket_params(maddr)
         self._host, self._port = host, port
-        self._ssl_context = _server_ssl_context(maddr) if secure else None
+        if secure and self._configured_ssl_context is None:
+            raise OpenConnectionError(
+                "wss listener requires an SSL context configured on WebSocketListener"
+            )
+        self._ssl_context = self._configured_ssl_context if secure else None
 
         async def handler(request: WebSocketRequest) -> None:
             websocket = await request.accept()
@@ -82,10 +91,17 @@ class WebSocketListener(IListener):
 
 
 class WebSocket(ITransport):
+    def __init__(self, ssl_context: ssl.SSLContext | None = None) -> None:
+        self.ssl_context = ssl_context
+
     async def dial(self, maddr: Multiaddr) -> IRawConnection:
         host, port, secure = _websocket_params(maddr)
         scheme = "wss" if secure else "ws"
-        ssl_context = _client_ssl_context(maddr) if secure else None
+        if secure and self.ssl_context is None:
+            raise OpenConnectionError(
+                "wss dial requires an SSL context configured on WebSocket"
+            )
+        ssl_context = self.ssl_context if secure else None
         try:
             context_manager = open_websocket_url(
                 f"{scheme}://{host}:{port}/",
@@ -99,14 +115,4 @@ class WebSocket(ITransport):
         return WebSocketConnection(websocket, True, context_manager)
 
     def create_listener(self, handler_function: THandler) -> WebSocketListener:
-        return WebSocketListener(handler_function)
-
-
-def _server_ssl_context(maddr: Multiaddr) -> ssl.SSLContext:
-    raise OpenConnectionError(
-        f"TLS configuration is required for wss listener: {maddr}"
-    )
-
-
-def _client_ssl_context(maddr: Multiaddr) -> ssl.SSLContext:
-    raise OpenConnectionError(f"TLS configuration is required for wss dial: {maddr}")
+        return WebSocketListener(handler_function, self.ssl_context)

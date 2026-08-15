@@ -2,6 +2,7 @@ import pytest
 from multiaddr import Multiaddr
 import trio
 
+from libp2p.transport.exceptions import OpenConnectionError
 from libp2p.transport.websocket.connection import WebSocketConnection
 from libp2p.transport.websocket.transport import WebSocket, WebSocketListener
 
@@ -67,3 +68,12 @@ async def test_websocket_transport_round_trip_over_loopback():
         await connection.close()
         nursery.cancel_scope.cancel()
     await listener.close()
+
+
+@pytest.mark.trio
+async def test_wss_requires_explicit_tls_configuration():
+    address = Multiaddr("/ip4/127.0.0.1/tcp/443/wss")
+    transport = WebSocket()
+
+    with pytest.raises(OpenConnectionError, match="SSL context"):
+        await transport.dial(address)
