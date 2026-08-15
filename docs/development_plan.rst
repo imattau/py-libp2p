@@ -235,9 +235,11 @@ Interop follows the native transport, security, and protocol ports. It is an ext
 compatibility check, not a runtime dependency or an implementation prerequisite.
 
 23. **Stand up real go-libp2p interop tests.**
-    The opt-in ``p2pd`` ping test lives in ``tests/interop/go_libp2p/`` and should be
-    expanded into ping/identify matrices once the native P2–P5 work is ready.
-    *Effort: medium. Risk: surfaces protocol deviations.*
+    The opt-in ``p2pd`` tests now cover both directions of the standard ping stream:
+    Python pinging Go and Go opening a ping stream against Python. Expand this into
+    ping/identify and security/transport matrices as the external harnesses stabilize.
+    *Status: baseline bidirectional coverage complete; broader matrices pending.
+    Effort remaining: medium. Risk: surfaces protocol deviations.*
 
 24. **Repair the js-libp2p ping interop.**
     Root-cause the existing yamux/multistream negotiation failure and make ping pass.
