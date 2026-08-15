@@ -14,6 +14,12 @@ from .aiortc_engine import (
 )
 from .connection import WebRTCConnection
 from .direct import WebRTCDirectAddress
+from .signaling import (
+    WebRTCDirectCredentials,
+    munge_direct_sdp,
+    new_direct_credentials,
+    noise_prologue,
+)
 
 __all__ = [
     "AsyncioLoopThread",
@@ -23,7 +29,11 @@ __all__ = [
     "WebRTCDirectAddress",
     "WebRTCDependencyError",
     "WebRTCFrame",
+    "WebRTCDirectCredentials",
     "SessionDescription",
     "decode_frames",
     "encode_frame",
+    "munge_direct_sdp",
+    "new_direct_credentials",
+    "noise_prologue",
 ]
