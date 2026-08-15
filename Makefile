@@ -60,7 +60,8 @@ PB = libp2p/crypto/pb/crypto.proto \
 	libp2p/identity/identify/pb/identify.proto \
 	libp2p/host/autonat/pb/autonat.proto \
 	libp2p/relay/circuit_v2/pb/circuit.proto \
-	libp2p/kad_dht/pb/kademlia.proto
+	libp2p/kad_dht/pb/kademlia.proto \
+	libp2p/discovery/rendezvous/pb/rendezvous.proto
 
 PY = $(PB:.proto=_pb2.py)
 PYI = $(PB:.proto=_pb2.pyi)
