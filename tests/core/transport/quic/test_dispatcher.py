@@ -5,7 +5,8 @@ from libp2p.transport.quic.events import QuicConnectionClosed, QuicStreamData
 
 
 class FakeConnection:
-    def __init__(self):
+    def __init__(self, host_cid=None):
+        self.host_cid = host_cid
         self.received = []
         self.events = [QuicStreamData(2, b"reply", True)]
         self.output = [(b"response", ("127.0.0.1", 4))]
@@ -19,6 +20,23 @@ class FakeConnection:
     def datagrams_to_send(self, now):
         output, self.output = self.output, []
         return output
+
+
+def test_dispatcher_removes_secondary_cid_route_without_dropping_primary():
+    dispatcher = QuicDatagramDispatcher(FakeSocket())
+    address = ("127.0.0.1", 4)
+    primary = FakeConnection(b"primary")
+    secondary = FakeConnection(b"secondary")
+
+    dispatcher.register(address, primary, lambda event: None)
+    dispatcher.register(address, secondary, lambda event: None)
+    dispatcher.unregister(address, secondary)
+
+    assert dispatcher._routes[address][0] is primary
+    assert (address, b"secondary") not in dispatcher._cid_routes
+
+    dispatcher.unregister(address, primary)
+    assert address not in dispatcher._routes
 
 
 class FakeSocket:
