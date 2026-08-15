@@ -109,3 +109,29 @@ async def test_aiortc_engine_exchanges_framed_data_channel_messages() -> None:
     finally:
         await first.close()
         await second.close()
+
+
+@pytest.mark.trio
+async def test_aiortc_engine_exchanges_negotiated_direct_channel() -> None:
+    if importlib.util.find_spec("aiortc") is None:
+        pytest.skip("aiortc is not installed")
+
+    first = AiortcWebRTCEngine()
+    second = AiortcWebRTCEngine()
+    try:
+        await first.start()
+        await second.start()
+        outbound = await first.create_direct_data_channel(True)
+        inbound = await second.create_direct_data_channel(False)
+        offer = await first.create_offer()
+        await second.set_remote_description(offer)
+        answer = await second.create_answer()
+        await first.set_remote_description(answer)
+        await outbound.wait_ready()
+        await inbound.wait_ready()
+        await outbound.write(b"direct channel")
+        with trio.fail_after(10):
+            assert await inbound.read() == b"direct channel"
+    finally:
+        await first.close()
+        await second.close()
