@@ -6,8 +6,10 @@ from multiaddr import Multiaddr
 import trio
 
 from libp2p.custom_types import TProtocol
+from libp2p.exceptions import ParseError
 from libp2p.host.basic_host import BasicHost
 from libp2p.host.holepunch.pb.holepunch_pb2 import HolePunch
+from libp2p.io.exceptions import IncompleteReadError
 from libp2p.io.utils import read_exactly
 from libp2p.network.events import EventConnected
 from libp2p.peer.id import ID
@@ -90,13 +92,16 @@ class HolePunchService:
 
     @staticmethod
     async def _read_message(stream) -> HolePunch:
-        length = await decode_uvarint_from_stream(stream)
+        try:
+            length = await decode_uvarint_from_stream(stream)
+        except (IncompleteReadError, ParseError, ValueError) as error:
+            raise HolePunchProtocolError("invalid DCUtR length prefix") from error
         if length > MAX_MESSAGE_SIZE:
             raise HolePunchProtocolError("DCUtR message exceeds 4 KiB")
         message = HolePunch()
         try:
             message.ParseFromString(await read_exactly(stream, length))
-        except DecodeError as error:
+        except (DecodeError, IncompleteReadError) as error:
             raise HolePunchProtocolError("invalid DCUtR message") from error
         if not message.IsInitialized():
             raise HolePunchProtocolError("DCUtR message has no type")

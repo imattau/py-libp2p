@@ -121,6 +121,17 @@ async def test_handler_rejects_sync_as_first_message() -> None:
 
 
 @pytest.mark.trio
+async def test_handler_closes_truncated_message() -> None:
+    stream = MemoryStream(b"\x80")
+    service = HolePunchService(FakeHost(stream))
+
+    await service.handle_stream(stream)
+
+    assert stream.closed
+    assert stream.writes == []
+
+
+@pytest.mark.trio
 async def test_handler_dials_remote_candidates_after_sync() -> None:
     connect = HolePunch(type=HolePunch.CONNECT, ObsAddrs=[ADDR.to_bytes()])
     sync = HolePunch(type=HolePunch.SYNC)
