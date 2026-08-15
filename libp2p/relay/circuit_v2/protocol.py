@@ -734,22 +734,30 @@ class CircuitV2Protocol(Service):
                 ),
             )
 
-            # Start relaying data
-            async with trio.open_nursery() as nursery:
-                nursery.start_soon(
-                    self._relay_data,
-                    stream,
-                    dst_stream,
-                    destination_peer_id,
-                    requester_peer_id,
-                )
-                nursery.start_soon(
-                    self._relay_data,
-                    dst_stream,
-                    stream,
-                    destination_peer_id,
-                    requester_peer_id,
-                )
+            # Start relaying data until the configured circuit duration expires.
+            relay_scope = (
+                trio.move_on_after(self.limits.duration)
+                if self.limits.duration > 0
+                else trio.CancelScope()
+            )
+            with relay_scope:
+                async with trio.open_nursery() as nursery:
+                    nursery.start_soon(
+                        self._relay_data,
+                        stream,
+                        dst_stream,
+                        destination_peer_id,
+                        requester_peer_id,
+                    )
+                    nursery.start_soon(
+                        self._relay_data,
+                        dst_stream,
+                        stream,
+                        destination_peer_id,
+                        requester_peer_id,
+                    )
+            if relay_scope.cancelled_caught:
+                logger.info("Relay connection duration limit reached")
 
         except (trio.TooSlowError, ConnectionError) as e:
             logger.error("Error establishing relay connection: %s", str(e))
@@ -845,15 +853,16 @@ class CircuitV2Protocol(Service):
             logger.error("Error relaying data: %s", str(e))
         finally:
             # Clean up streams and remove from active relays
-            await src_stream.reset()
-            await dst_stream.reset()
-            if active_relay_peer_id in self._active_relays:
-                del self._active_relays[active_relay_peer_id]
-                reservation = self.resource_manager._reservations.get(
-                    reservation_peer_id
-                )
-                if reservation and reservation.active_connections > 0:
-                    reservation.active_connections -= 1
+            with trio.CancelScope(shield=True):
+                await src_stream.reset()
+                await dst_stream.reset()
+                if active_relay_peer_id in self._active_relays:
+                    del self._active_relays[active_relay_peer_id]
+                    reservation = self.resource_manager._reservations.get(
+                        reservation_peer_id
+                    )
+                    if reservation and reservation.active_connections > 0:
+                        reservation.active_connections -= 1
 
     async def _send_status(
         self,
