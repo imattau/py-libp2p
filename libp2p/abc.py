@@ -48,6 +48,7 @@ from libp2p.peer.peerinfo import (
 )
 
 if TYPE_CHECKING:
+    from libp2p.network.events import EventBus
     from libp2p.peer.envelope import Envelope
     from libp2p.peer.peer_record import PeerRecord
     from libp2p.protocol_muxer.multiselect import Multiselect
@@ -1418,6 +1419,10 @@ class INetwork(ABC):
             The identifier of this peer.
 
         """
+
+    @abstractmethod
+    def get_event_bus(self) -> "EventBus":
+        """Return the typed network lifecycle event bus."""
 
     @abstractmethod
     async def dial_peer(self, peer_id: ID) -> INetConn:

@@ -3,6 +3,9 @@ from dataclasses import dataclass
 import pytest
 import trio
 
+from libp2p import (
+    new_host,
+)
 from libp2p.host.connmgr import (
     BasicConnMgr,
 )
@@ -75,6 +78,14 @@ class FakeNetwork:
 
 def peer(num: int) -> ID:
     return ID(f"peer-{num}".encode())
+
+
+def test_new_host_binds_conn_manager_to_event_bus():
+    connmgr = BasicConnMgr.new(low_water=0, high_water=1)
+    host = new_host(conn_manager=connmgr)
+
+    assert connmgr._network is host.get_network()
+    assert connmgr._event_bus is host.get_network().get_event_bus()
 
 
 @pytest.mark.trio
