@@ -413,8 +413,7 @@ class RelayDiscovery(Service):
                     if response.type == HopMessage.STATUS and response.HasField(
                         "status"
                     ):
-                        # Access status code directly from protobuf object
-                        status_code = getattr(response.status, "code", StatusCode.OK)
+                        status_code = response.status.code
 
                         if status_code == StatusCode.OK:
                             # Update relay info with reservation details
@@ -455,8 +454,7 @@ class RelayDiscovery(Service):
                     # Reservation failed
                     error_message = "Unknown error"
                     if response.HasField("status"):
-                        # Access message directly from protobuf object
-                        error_message = getattr(response.status, "message", "")
+                        error_message = response.status.message
 
                     logger.warning(
                         "Reservation request rejected by relay %s: %s",
