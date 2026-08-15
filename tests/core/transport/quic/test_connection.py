@@ -9,6 +9,7 @@ from cryptography.hazmat.primitives.serialization import (
 from cryptography.x509 import load_der_x509_certificate
 
 from libp2p.crypto.ed25519 import create_new_key_pair
+from libp2p.security.tls import TLS_PROTOCOL_ID, TLSIdentity
 from libp2p.security.tls.certificate import LIBP2P_CERTIFICATE_VALIDITY
 from libp2p.transport.quic.config import QuicTransportConfig
 from libp2p.transport.quic.connection import (
@@ -186,3 +187,12 @@ def test_peer_id_from_certificate_accepts_tls_spec_ed25519_vector():
     assert str(peer_id_from_certificate(certificate)) == (
         "12D3KooWM6CgA9iBFZmcYAHA6A2qvbAxqfkmrYiRQuz3XEsk4Ksv"
     )
+
+
+def test_tls_identity_exposes_protocol_and_certificate():
+    key_pair = create_new_key_pair(seed=b"i" * 32)
+    identity = TLSIdentity.create(key_pair)
+
+    assert TLS_PROTOCOL_ID == "/tls/1.0.0"
+    assert identity.peer_id == peer_id_from_certificate(identity.certificate)
+    assert identity.certificate_der
