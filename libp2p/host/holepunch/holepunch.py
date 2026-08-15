@@ -17,6 +17,7 @@ HOLEPUNCH_PROTOCOL_ID = TProtocol("/libp2p/dcutr")
 MAX_MESSAGE_SIZE = 4096
 MAX_ATTEMPTS = 3
 MAX_SYNC_DELAY = 5
+STREAM_TIMEOUT = 60
 
 logger = logging.getLogger("libp2p.host.holepunch")
 
@@ -123,24 +124,25 @@ class HolePunchService:
 
     async def handle_stream(self, stream) -> None:
         try:
-            connect = await self._read_message(stream)
-            if connect.type != HolePunch.CONNECT:
-                raise HolePunchProtocolError("expected DCUtR CONNECT")
-            remote_addresses = self._addresses(connect)
-            await stream.write(
-                self._message(HolePunch.CONNECT, self._candidate_addrs())
-            )
-            sync = await self._read_message(stream)
-            if sync.type != HolePunch.SYNC:
-                raise HolePunchProtocolError("expected DCUtR SYNC")
-            direct_addresses = self._direct_addresses(remote_addresses)
-            dial_peer_direct = getattr(
-                self.host.get_network(), "dial_peer_direct", None
-            )
-            peer_id = stream.muxed_conn.peer_id
-            if direct_addresses and dial_peer_direct is not None:
-                await dial_peer_direct(peer_id, direct_addresses)
-        except (HolePunchProtocolError, EOFError) as error:
+            with trio.fail_after(STREAM_TIMEOUT):
+                connect = await self._read_message(stream)
+                if connect.type != HolePunch.CONNECT:
+                    raise HolePunchProtocolError("expected DCUtR CONNECT")
+                remote_addresses = self._addresses(connect)
+                await stream.write(
+                    self._message(HolePunch.CONNECT, self._candidate_addrs())
+                )
+                sync = await self._read_message(stream)
+                if sync.type != HolePunch.SYNC:
+                    raise HolePunchProtocolError("expected DCUtR SYNC")
+                direct_addresses = self._direct_addresses(remote_addresses)
+                dial_peer_direct = getattr(
+                    self.host.get_network(), "dial_peer_direct", None
+                )
+                peer_id = stream.muxed_conn.peer_id
+                if direct_addresses and dial_peer_direct is not None:
+                    await dial_peer_direct(peer_id, direct_addresses)
+        except (HolePunchProtocolError, EOFError, trio.TooSlowError) as error:
             logger.debug("invalid DCUtR stream: %s", error)
         finally:
             await stream.close()
@@ -167,25 +169,31 @@ class HolePunchService:
         for attempt in range(MAX_ATTEMPTS):
             stream = await self.host.new_stream(peer_id, [HOLEPUNCH_PROTOCOL_ID])
             try:
-                started_at = trio.current_time()
-                await stream.write(
-                    self._message(HolePunch.CONNECT, local_addresses)
-                )
-                response = await self._read_message(stream)
-                if response.type != HolePunch.CONNECT:
-                    raise HolePunchProtocolError("expected DCUtR CONNECT response")
-                remote_addresses = self._addresses(response)
-                await stream.write(self._message(HolePunch.SYNC, ()))
-                direct_addresses = self._direct_addresses(remote_addresses)
-                dial_peer_direct = getattr(
-                    self.host.get_network(), "dial_peer_direct", None
-                )
-                if direct_addresses and dial_peer_direct is not None:
-                    await trio.sleep(
-                        min((trio.current_time() - started_at) / 2, MAX_SYNC_DELAY)
+                with trio.fail_after(STREAM_TIMEOUT):
+                    started_at = trio.current_time()
+                    await stream.write(
+                        self._message(HolePunch.CONNECT, local_addresses)
                     )
-                    await dial_peer_direct(peer_id, direct_addresses)
-                return remote_addresses
+                    response = await self._read_message(stream)
+                    if response.type != HolePunch.CONNECT:
+                        raise HolePunchProtocolError(
+                            "expected DCUtR CONNECT response"
+                        )
+                    remote_addresses = self._addresses(response)
+                    await stream.write(self._message(HolePunch.SYNC, ()))
+                    direct_addresses = self._direct_addresses(remote_addresses)
+                    dial_peer_direct = getattr(
+                        self.host.get_network(), "dial_peer_direct", None
+                    )
+                    if direct_addresses and dial_peer_direct is not None:
+                        await trio.sleep(
+                            min(
+                                (trio.current_time() - started_at) / 2,
+                                MAX_SYNC_DELAY,
+                            )
+                        )
+                        await dial_peer_direct(peer_id, direct_addresses)
+                    return remote_addresses
             except Exception as error:
                 last_error = error
                 logger.debug(
