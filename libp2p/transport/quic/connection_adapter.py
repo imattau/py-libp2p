@@ -4,6 +4,7 @@ from typing import Any
 import trio
 
 from libp2p.peer.id import ID
+from libp2p.stream_muxer.exceptions import MuxedConnUnavailable
 
 from .config import QuicTransportConfig
 from .connection import peer_id_from_certificate
@@ -67,7 +68,10 @@ class QuicConnectionAdapter:
         return await self._manager.open_stream()
 
     async def accept_stream(self) -> QuicStream:
-        return await self._incoming_receive.receive()
+        stream = await self._incoming_receive.receive()
+        if stream is None:
+            raise MuxedConnUnavailable("QUIC connection closed")
+        return stream
 
     async def wait_handshake(self) -> None:
         await self._handshake_complete.wait()
@@ -106,6 +110,10 @@ class QuicConnectionAdapter:
             self._handshake_complete.set()
         elif isinstance(event, QuicConnectionClosed):
             self._closed.set()
+            try:
+                self._incoming_send.send_nowait(None)
+            except trio.WouldBlock:
+                pass
 
     def _queue_incoming_stream(self, stream: QuicStream) -> None:
         try:

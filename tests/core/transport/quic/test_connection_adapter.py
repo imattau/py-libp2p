@@ -1,7 +1,8 @@
 import pytest
 
+from libp2p.stream_muxer.exceptions import MuxedConnUnavailable
 from libp2p.transport.quic.connection_adapter import QuicConnectionAdapter
-from libp2p.transport.quic.events import QuicStreamData
+from libp2p.transport.quic.events import QuicConnectionClosed, QuicStreamData
 
 
 class FakeConnection:
@@ -35,3 +36,13 @@ async def test_stream_write_requires_running_connection():
 
     with pytest.raises(RuntimeError, match="not running"):
         await stream.write(b"data")
+
+
+@pytest.mark.trio
+async def test_connection_adapter_unblocks_accept_on_close():
+    adapter = QuicConnectionAdapter(FakeConnection(), object())
+
+    adapter._handle_event(QuicConnectionClosed("peer", 0, "closed"))
+
+    with pytest.raises(MuxedConnUnavailable, match="connection closed"):
+        await adapter.accept_stream()
