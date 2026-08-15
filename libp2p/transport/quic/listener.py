@@ -9,7 +9,7 @@ from libp2p.abc import IListener
 from libp2p.crypto.keys import KeyPair
 from libp2p.custom_types import THandler
 
-from .config import QUIC_V1_MULTIADDR_PROTOCOL
+from .config import QUIC_V1_MULTIADDR_PROTOCOL, QuicTransportConfig
 from .connection import create_quic_connection
 from .connection_adapter import QuicConnectionAdapter
 from .dispatcher import QuicDatagramDispatcher
@@ -86,6 +86,43 @@ class QuicListener(IListener):
         self._socket = None
         self._dispatcher = None
         self._addrs = ()
+
+    async def dial_hole_punch(
+        self,
+        maddr: Multiaddr,
+        key_pair: KeyPair,
+        nursery: trio.Nursery,
+        config: QuicTransportConfig | None = None,
+    ) -> QuicConnectionAdapter:
+        """Dial through this listener's shared UDP socket."""
+        if self._socket is None or self._dispatcher is None:
+            raise RuntimeError("QUIC listener is not running")
+        host = maddr.value_for_protocol("ip4")
+        port = maddr.value_for_protocol("udp")
+        if host is None or port is None:
+            raise ValueError(f"invalid QUIC multiaddr: {maddr}")
+
+        remote_addr = (host, int(port))
+        connection = create_quic_connection(
+            is_client=True,
+            key_pair=key_pair,
+            config=config,
+        )
+        connection.connect(remote_addr, trio.current_time())
+        adapter = QuicConnectionAdapter(
+            connection,
+            object(),
+            lambda: self._dispatcher.flush_connection(remote_addr),
+        )
+
+        async def unregister() -> None:
+            self._dispatcher.unregister(remote_addr, connection)
+
+        adapter.on_close = unregister
+        self._dispatcher.register(remote_addr, connection, adapter._handle_event)
+        await self._dispatcher.flush_connection(remote_addr)
+        await adapter.wait_handshake()
+        return adapter
 
     async def _accept_unknown(
         self, addr: object, data: bytes

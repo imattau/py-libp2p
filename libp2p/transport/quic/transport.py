@@ -18,10 +18,12 @@ class QuicTransport(ITransport):
     """Public transport facade for the native Trio QUIC implementation."""
 
     native_connections = True
+    supports_hole_punching = True
 
     def __init__(self, key_pair: KeyPair, nursery: trio.Nursery | None = None) -> None:
         self.key_pair = key_pair
         self.nursery = nursery
+        self._listeners: list[QuicListener] = []
 
     async def dial(self, maddr: Multiaddr) -> IRawConnection:
         if self.nursery is None:
@@ -45,6 +47,13 @@ class QuicTransport(ITransport):
         local_port = local_maddr.value_for_protocol("udp")
         if local_host is None or local_port is None:
             raise ValueError(f"invalid local QUIC multiaddr: {local_maddr}")
+        for listener in self._listeners:
+            if local_maddr in listener.get_addrs():
+                return await listener.dial_hole_punch(
+                    maddr,
+                    self.key_pair,
+                    self.nursery,
+                )
         return await QuicDialer().dial_hole_punch(
             maddr,
             self.key_pair,
@@ -54,7 +63,9 @@ class QuicTransport(ITransport):
         )
 
     def create_listener(self, handler_function: THandler) -> IListener:
-        return QuicListener(handler_function, self.key_pair)
+        listener = QuicListener(handler_function, self.key_pair)
+        self._listeners.append(listener)
+        return listener
 
 
 def _is_quic_v1(maddr: Multiaddr) -> bool:

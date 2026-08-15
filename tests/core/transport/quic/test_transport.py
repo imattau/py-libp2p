@@ -65,6 +65,7 @@ async def test_native_quic_transport_integrates_with_swarm():
     )
 
     async with background_trio_service(swarm_0), background_trio_service(swarm_1):
+        assert await swarm_0.listen(quic_addr)
         assert await swarm_1.listen(quic_addr)
         listen_addr = next(iter(swarm_1.listeners.values())).get_addrs()[0]
         swarm_0.peerstore.add_addrs(swarm_1.get_peer_id(), [listen_addr], 60_000)
@@ -74,3 +75,11 @@ async def test_native_quic_transport_integrates_with_swarm():
         assert swarm_1.get_peer_id() in swarm_0.connections
         assert swarm_0.get_peer_id() in swarm_1.connections
         await stream.close()
+
+        replacement = await swarm_0.dial_addr(
+            listen_addr,
+            swarm_1.get_peer_id(),
+            replace_existing=True,
+            hole_punch=True,
+        )
+        assert replacement is not None
