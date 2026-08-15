@@ -139,7 +139,9 @@ class CircuitV2Protocol(Service):
         self.resource_manager = RelayResourceManager(
             self.limits, shared_resource_manager
         )
-        self._active_relays: dict[ID, tuple[INetStream, INetStream | None]] = {}
+        self._active_relays: dict[
+            ID, tuple[INetStream, INetStream | None, ID]
+        ] = {}
         self.event_started = trio.Event()
 
     async def run(self, *, task_status: Any = trio.TASK_STATUS_IGNORED) -> None:
@@ -161,7 +163,7 @@ class CircuitV2Protocol(Service):
             await self.manager.wait_finished()
         finally:
             # Clean up any active relay connections
-            for src_stream, dst_stream in self._active_relays.values():
+            for src_stream, dst_stream, _ in self._active_relays.values():
                 await self._close_stream(src_stream)
                 await self._close_stream(dst_stream)
             self._active_relays.clear()
@@ -459,8 +461,8 @@ class CircuitV2Protocol(Service):
                 await self._close_stream(stream)
                 return
 
-            src_stream, _ = self._active_relays[peer_id]
-            self._active_relays[peer_id] = (src_stream, stream)
+            src_stream, _, destination_peer_id = self._active_relays[peer_id]
+            self._active_relays[peer_id] = (src_stream, stream, destination_peer_id)
 
             # Send success status to both sides
             await self._send_status(
@@ -476,8 +478,20 @@ class CircuitV2Protocol(Service):
 
             # Start relaying data
             async with trio.open_nursery() as nursery:
-                nursery.start_soon(self._relay_data, src_stream, stream, peer_id)
-                nursery.start_soon(self._relay_data, stream, src_stream, peer_id)
+                nursery.start_soon(
+                    self._relay_data,
+                    src_stream,
+                    stream,
+                    destination_peer_id,
+                    peer_id,
+                )
+                nursery.start_soon(
+                    self._relay_data,
+                    stream,
+                    src_stream,
+                    destination_peer_id,
+                    peer_id,
+                )
 
         except trio.TooSlowError:
             logger.error("Timeout reading from stop stream")
@@ -634,7 +648,7 @@ class CircuitV2Protocol(Service):
         # Verify reservation if provided
         if msg.HasField("reservation"):
             if not self.resource_manager.verify_reservation(
-                requester_peer_id, msg.reservation
+                destination_peer_id, msg.reservation
             ):
                 await self._send_status(
                     stream,
@@ -645,7 +659,7 @@ class CircuitV2Protocol(Service):
                 return
 
         # Check resource limits
-        if not self.resource_manager.can_accept_connection(requester_peer_id):
+        if not self.resource_manager.can_accept_connection(destination_peer_id):
             await self._send_status(
                 stream,
                 StatusCode.RESOURCE_LIMIT_EXCEEDED,
@@ -656,7 +670,11 @@ class CircuitV2Protocol(Service):
 
         try:
             # Store the source stream with properly typed None
-            self._active_relays[requester_peer_id] = (stream, None)
+            self._active_relays[requester_peer_id] = (
+                stream,
+                None,
+                destination_peer_id,
+            )
 
             # Try to connect to the destination with timeout
             with trio.fail_after(STREAM_READ_TIMEOUT):
@@ -694,10 +712,14 @@ class CircuitV2Protocol(Service):
                     )
 
             # Update active relays with destination stream
-            self._active_relays[requester_peer_id] = (stream, dst_stream)
+            self._active_relays[requester_peer_id] = (
+                stream,
+                dst_stream,
+                destination_peer_id,
+            )
 
             # Update reservation connection count
-            reservation = self.resource_manager._reservations.get(requester_peer_id)
+            reservation = self.resource_manager._reservations.get(destination_peer_id)
             if reservation:
                 reservation.active_connections += 1
 
@@ -711,10 +733,18 @@ class CircuitV2Protocol(Service):
             # Start relaying data
             async with trio.open_nursery() as nursery:
                 nursery.start_soon(
-                    self._relay_data, stream, dst_stream, requester_peer_id
+                    self._relay_data,
+                    stream,
+                    dst_stream,
+                    destination_peer_id,
+                    requester_peer_id,
                 )
                 nursery.start_soon(
-                    self._relay_data, dst_stream, stream, requester_peer_id
+                    self._relay_data,
+                    dst_stream,
+                    stream,
+                    destination_peer_id,
+                    requester_peer_id,
                 )
 
         except (trio.TooSlowError, ConnectionError) as e:
@@ -747,7 +777,8 @@ class CircuitV2Protocol(Service):
         self,
         src_stream: INetStream,
         dst_stream: INetStream,
-        peer_id: ID,
+        reservation_peer_id: ID,
+        active_relay_peer_id: ID,
     ) -> None:
         """
         Relay data between two streams.
@@ -758,8 +789,10 @@ class CircuitV2Protocol(Service):
             Source stream to read from
         dst_stream : INetStream
             Destination stream to write to
-        peer_id : ID
-            ID of the peer being relayed
+        reservation_peer_id : ID
+            ID of the reserved destination peer
+        active_relay_peer_id : ID
+            ID of the connection initiator used to match the STOP stream
 
         """
         try:
@@ -782,19 +815,24 @@ class CircuitV2Protocol(Service):
                     break
 
                 # Update resource usage
-                reservation = self.resource_manager._reservations.get(peer_id)
+                reservation = self.resource_manager._reservations.get(
+                    reservation_peer_id
+                )
                 if reservation:
                     try:
                         reservation.reserve_data(len(data))
                     except LimitExceeded:
                         logger.warning(
-                            "Shared relay data limit exceeded for peer %s", peer_id
+                            "Shared relay data limit exceeded for peer %s",
+                            reservation_peer_id,
                         )
                         break
                     try:
                         reservation.data_used += len(data)
                         if reservation.data_used >= reservation.limits.data:
-                            logger.warning("Data limit exceeded for peer %s", peer_id)
+                            logger.warning(
+                                "Data limit exceeded for peer %s", reservation_peer_id
+                            )
                             break
                     finally:
                         reservation.release_data(len(data))
@@ -805,9 +843,11 @@ class CircuitV2Protocol(Service):
             # Clean up streams and remove from active relays
             await src_stream.reset()
             await dst_stream.reset()
-            if peer_id in self._active_relays:
-                del self._active_relays[peer_id]
-                reservation = self.resource_manager._reservations.get(peer_id)
+            if active_relay_peer_id in self._active_relays:
+                del self._active_relays[active_relay_peer_id]
+                reservation = self.resource_manager._reservations.get(
+                    reservation_peer_id
+                )
                 if reservation and reservation.active_connections > 0:
                     reservation.active_connections -= 1
 
