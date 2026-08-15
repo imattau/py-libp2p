@@ -24,6 +24,7 @@ from .stream_manager import QuicStreamManager
 from .socket import TrioQuicDatagramSocket
 from .listener import QuicListener
 from .dialer import QuicDialer
+from .transport import QuicTransport
 
 __all__ = (
     "QUIC_V1_MULTIADDR_PROTOCOL",
@@ -40,6 +41,7 @@ __all__ = (
     "TrioQuicDatagramSocket",
     "QuicListener",
     "QuicDialer",
+    "QuicTransport",
     "create_libp2p_certificate",
     "create_quic_connection",
     "peer_id_from_certificate",
