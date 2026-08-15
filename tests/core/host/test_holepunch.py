@@ -182,3 +182,9 @@ def test_relayed_connection_detection() -> None:
         Connection(Multiaddr("/p2p-circuit"))
     )
     assert not HolePunchService._is_relayed_connection(Connection(ADDR))
+
+
+def test_direct_addresses_are_unique_and_exclude_relays() -> None:
+    relay = Multiaddr("/p2p-circuit")
+
+    assert HolePunchService._direct_addresses((ADDR, ADDR, relay)) == (ADDR,)

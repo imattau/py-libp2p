@@ -119,13 +119,16 @@ class HolePunchService:
 
     @staticmethod
     def _direct_addresses(addresses: Iterable[Multiaddr]) -> tuple[Multiaddr, ...]:
-        return tuple(
-            address
-            for address in addresses
-            if not any(
+        direct: list[Multiaddr] = []
+        seen: set[Multiaddr] = set()
+        for address in addresses:
+            if address in seen or any(
                 protocol.name == "p2p-circuit" for protocol in address.protocols()
-            )
-        )
+            ):
+                continue
+            seen.add(address)
+            direct.append(address)
+        return tuple(direct)
 
     async def handle_stream(self, stream) -> None:
         try:
