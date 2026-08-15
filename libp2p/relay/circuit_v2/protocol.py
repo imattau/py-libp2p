@@ -23,6 +23,9 @@ from libp2p.abc import (
 from libp2p.custom_types import (
     TProtocol,
 )
+from libp2p.host.resource_manager import (
+    LimitExceeded,
+)
 from libp2p.io.abc import (
     ReadWriteCloser,
 )
@@ -130,7 +133,11 @@ class CircuitV2Protocol(Service):
         self.host = host
         self.limits = limits or DEFAULT_RELAY_LIMITS
         self.allow_hop = allow_hop
-        self.resource_manager = RelayResourceManager(self.limits)
+        host_network = host.get_network()
+        shared_resource_manager = getattr(host_network, "resource_manager", None)
+        self.resource_manager = RelayResourceManager(
+            self.limits, shared_resource_manager
+        )
         self._active_relays: dict[ID, tuple[INetStream, INetStream | None]] = {}
         self.event_started = trio.Event()
 
@@ -157,6 +164,7 @@ class CircuitV2Protocol(Service):
                 await self._close_stream(src_stream)
                 await self._close_stream(dst_stream)
             self._active_relays.clear()
+            self.resource_manager.close()
 
             # Unregister protocol handlers
             if self.allow_hop:
@@ -544,6 +552,14 @@ class CircuitV2Protocol(Service):
 
                 logger.debug("Reservation response sent successfully")
 
+        except LimitExceeded:
+            logger.debug("Shared relay resource limit exceeded for peer %s", peer_id)
+            if cast(INetStreamWithExtras, stream).is_open():
+                await self._send_status(
+                    stream,
+                    StatusCode.RESOURCE_LIMIT_EXCEEDED,
+                    "Shared relay resource limit exceeded",
+                )
         except Exception as e:
             logger.error("Error handling reservation request: %s", str(e))
             if cast(INetStreamWithExtras, stream).is_open():
@@ -661,9 +677,6 @@ class CircuitV2Protocol(Service):
             if peer_id in self._active_relays:
                 del self._active_relays[peer_id]
             # Clean up reservation connection count on failure
-            reservation = self.resource_manager._reservations.get(peer_id)
-            if reservation:
-                reservation.active_connections -= 1
             await stream.reset()
             if dst_stream and not cast(INetStreamWithExtras, dst_stream).is_closed():
                 await dst_stream.reset()
@@ -721,10 +734,20 @@ class CircuitV2Protocol(Service):
                 # Update resource usage
                 reservation = self.resource_manager._reservations.get(peer_id)
                 if reservation:
-                    reservation.data_used += len(data)
-                    if reservation.data_used >= reservation.limits.data:
-                        logger.warning("Data limit exceeded for peer %s", peer_id)
+                    try:
+                        reservation.reserve_data(len(data))
+                    except LimitExceeded:
+                        logger.warning(
+                            "Shared relay data limit exceeded for peer %s", peer_id
+                        )
                         break
+                    try:
+                        reservation.data_used += len(data)
+                        if reservation.data_used >= reservation.limits.data:
+                            logger.warning("Data limit exceeded for peer %s", peer_id)
+                            break
+                    finally:
+                        reservation.release_data(len(data))
 
         except Exception as e:
             logger.error("Error relaying data: %s", str(e))
@@ -734,6 +757,9 @@ class CircuitV2Protocol(Service):
             await dst_stream.reset()
             if peer_id in self._active_relays:
                 del self._active_relays[peer_id]
+                reservation = self.resource_manager._reservations.get(peer_id)
+                if reservation and reservation.active_connections > 0:
+                    reservation.active_connections -= 1
 
     async def _send_status(
         self,

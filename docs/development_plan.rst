@@ -60,13 +60,13 @@ as the first step.
    Swarm connection and stream opens now reserve/release resources through the manager.
    The manager also supports allowlisted peers, per-peer/per-protocol/per-service
    limit configuration, and autoscaled default limit sets.
+   Relay-v2 reservations and forwarded data also consume the shared ``relay``
+   service scope and release their accounting on expiry or shutdown.
 
    Remaining parity work:
 
-   * Integrate relay-v2 resource accounting with the shared manager instead of only
-     using relay-local reservation counters.
    * Add metrics/trace reporting once the observability layer exists.
-   *Status: in progress. Effort remaining: medium. Risk: medium. Depends on: connmgr.*
+   *Status: in progress. Effort remaining: low. Risk: low. Depends on: observability.*
 
 4. **Event bus and notifee alignment.**
    Promote connection/stream lifecycle notifications to a Go-style event surface so

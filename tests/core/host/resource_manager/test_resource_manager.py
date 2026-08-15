@@ -15,6 +15,10 @@ from libp2p.host.resource_manager.resource_manager import (
 )
 from libp2p.peer.id import ID
 from libp2p.peer.peerinfo import info_from_p2p_addr
+from libp2p.relay.circuit_v2.resources import (
+    RelayLimits,
+    RelayResourceManager,
+)
 from tests.utils.factories import HostFactory
 
 
@@ -100,6 +104,27 @@ def test_memory_priority_thresholds_are_enforced():
 
     manager.system.release_memory(30)
     assert manager.system.stat().memory == 60
+
+
+def test_relay_reservations_use_shared_service_resources():
+    manager = ResourceManager(
+        ResourceManagerLimits(
+            service_default=ResourceLimits(memory=1),
+        )
+    )
+    relay_manager = RelayResourceManager(
+        RelayLimits(duration=60, data=100, max_circuit_conns=1, max_reservations=2),
+        manager,
+    )
+
+    relay_manager.create_reservation(peer(1))
+
+    with pytest.raises(LimitExceeded):
+        relay_manager.create_reservation(peer(2))
+
+    assert manager.get_service_scope("relay").stat().memory == 1
+    relay_manager.close()
+    assert manager.get_service_scope("relay").stat().memory == 0
 
 
 def test_resource_limits_load_from_config_and_autoscale():

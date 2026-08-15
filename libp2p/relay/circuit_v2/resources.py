@@ -33,7 +33,7 @@ class RelayLimits:
 class Reservation:
     """Represents a relay reservation."""
 
-    def __init__(self, peer_id: ID, limits: RelayLimits):
+    def __init__(self, peer_id: ID, limits: RelayLimits, resource_scope=None):
         """
         Initialize a new reservation.
 
@@ -43,6 +43,8 @@ class Reservation:
             The peer ID this reservation is for
         limits : RelayLimits
             The resource limits for this reservation
+        resource_scope : ResourceScope, optional
+            Shared resource scope held for the reservation
 
         """
         self.peer_id = peer_id
@@ -51,6 +53,7 @@ class Reservation:
         self.expires_at = self.created_at + limits.duration
         self.data_used = 0
         self.active_connections = 0
+        self.resource_scope = resource_scope
         self.voucher = self._generate_voucher()
 
     def _generate_voucher(self) -> bytes:
@@ -104,6 +107,19 @@ class Reservation:
             signature=b"",
         )
 
+    def reserve_data(self, size: int) -> None:
+        if self.resource_scope is not None:
+            self.resource_scope.reserve_memory(size)
+
+    def release_data(self, size: int) -> None:
+        if self.resource_scope is not None:
+            self.resource_scope.release_memory(size)
+
+    def release_resources(self) -> None:
+        if self.resource_scope is not None:
+            self.resource_scope.done()
+            self.resource_scope = None
+
 
 class RelayResourceManager:
     """
@@ -115,7 +131,7 @@ class RelayResourceManager:
     - Managing connection quotas
     """
 
-    def __init__(self, limits: RelayLimits):
+    def __init__(self, limits: RelayLimits, resource_manager=None):
         """
         Initialize the resource manager.
 
@@ -123,10 +139,28 @@ class RelayResourceManager:
         ----------
         limits : RelayLimits
             The resource limits to enforce
+        resource_manager : ResourceManager, optional
+            Shared host resource manager for relay accounting
 
         """
         self.limits = limits
+        self.resource_manager = resource_manager
         self._reservations: dict[ID, Reservation] = {}
+
+    def _new_resource_scope(self):
+        if self.resource_manager is None:
+            return None
+
+        scope = None
+
+        def get_scope(service_scope) -> None:
+            nonlocal scope
+            scope = service_scope.begin_span()
+
+        self.resource_manager.view_service("relay", get_scope)
+        assert scope is not None
+        scope.reserve_memory(1)
+        return scope
 
     def can_accept_reservation(self, peer_id: ID) -> bool:
         """
@@ -169,9 +203,15 @@ class RelayResourceManager:
             The newly created reservation
 
         """
-        reservation = Reservation(peer_id, self.limits)
-        self._reservations[peer_id] = reservation
-        return reservation
+        scope = self._new_resource_scope()
+        try:
+            reservation = Reservation(peer_id, self.limits, scope)
+            self._reservations[peer_id] = reservation
+            return reservation
+        except Exception:
+            if scope is not None:
+                scope.done()
+            raise
 
     def verify_reservation(self, peer_id: ID, proto_res: PbReservation) -> bool:
         """
@@ -225,7 +265,8 @@ class RelayResourceManager:
             if now > res.expires_at
         ]
         for peer_id in expired:
-            del self._reservations[peer_id]
+            reservation = self._reservations.pop(peer_id)
+            reservation.release_resources()
 
     def reserve(self, peer_id: ID) -> int:
         """
@@ -252,3 +293,9 @@ class RelayResourceManager:
         # Create new reservation
         self.create_reservation(peer_id)
         return self.limits.duration
+
+    def close(self) -> None:
+        """Release all shared resource scopes held by reservations."""
+        for reservation in self._reservations.values():
+            reservation.release_resources()
+        self._reservations.clear()
