@@ -133,10 +133,11 @@ dependency.
      The native implementation now includes the shared WebRTC protobuf framing,
      incomplete-varint handling, 16 KiB message cap, and FIN/STOP/RESET/FIN_ACK
      control-frame model used by both WebRTC Direct and private-to-private WebRTC.
-     Integrating an asyncio-based WebRTC engine behind the Trio boundary, WebRTC
-     Direct certificate-address handling, and relay-assisted SDP signaling remain.
-     *Status: framing foundation complete; transport implementations pending.
-     Effort remaining: high. Risk: high.*
+     An optional aiortc peer-connection wrapper now runs behind a dedicated asyncio
+     loop thread and exposes SDP plus data-channel operations to Trio. WebRTC Direct
+     certificate-address handling and relay-assisted SDP signaling remain.
+     *Status: shared framing and engine boundary complete; transport signaling
+     implementations pending. Effort remaining: high. Risk: high.*
 
 P3 — NAT traversal
 ~~~~~~~~~~~~~~~~~~
