@@ -39,6 +39,7 @@ MAX_AUTONAT_MESSAGE_SIZE = 4096
 MAX_CONCURRENT_DIALS = 4
 AUTONAT_RESULT_TTL = 3600
 AUTONAT_PROBE_TIMEOUT = 15
+AUTONAT_PROBE_INTERVAL = 300
 
 logger = logging.getLogger("libp2p.host.autonat")
 
@@ -273,6 +274,24 @@ class AutoNATService:
 
         """
         return self.status
+
+    async def run(self) -> None:
+        """Periodically probe connected peers that advertise AutoNAT."""
+        while True:
+            peers: dict[ID, Sequence[Multiaddr]] = {}
+            addresses = tuple(self.host.get_addrs())
+            if addresses:
+                for peer_id in self.host.get_connected_peers():
+                    try:
+                        protocols = self.peerstore.get_protocols(peer_id)
+                    except Exception:
+                        continue
+                    if AUTONAT_PROTOCOL_ID in protocols:
+                        peers[peer_id] = addresses
+                if peers:
+                    await self.probe_many(peers)
+
+            await trio.sleep(AUTONAT_PROBE_INTERVAL)
 
     async def probe(
         self, server_peer_id: ID, addresses: Sequence[Multiaddr]
