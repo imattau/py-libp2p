@@ -42,6 +42,11 @@ from libp2p.exceptions import (
 from libp2p.io.exceptions import (
     IncompleteReadError,
 )
+from libp2p.network.events import (
+    EventConnected,
+    EventDisconnected,
+    EventSubscription,
+)
 from libp2p.network.exceptions import (
     SwarmException,
 )
@@ -70,9 +75,6 @@ from libp2p.utils.varint import encode_uvarint
 
 from .pb import (
     rpc_pb2,
-)
-from .pubsub_notifee import (
-    PubsubNotifee,
 )
 from .subscription import (
     TrioSubscriptionAPI,
@@ -112,6 +114,8 @@ class Pubsub(Service, IPubsub):
 
     peer_receive_channel: trio.MemoryReceiveChannel[ID]
     dead_peer_receive_channel: trio.MemoryReceiveChannel[ID]
+    peer_send_channel: trio.MemorySendChannel[ID]
+    dead_peer_send_channel: trio.MemorySendChannel[ID]
     _validator_semaphore: trio.Semaphore
 
     seen_messages: LastSeenCache
@@ -171,14 +175,11 @@ class Pubsub(Service, IPubsub):
         dead_peer_send, dead_peer_receive = trio.open_memory_channel[ID](0)
         # Only keep the receive channels in `Pubsub`.
         # Therefore, we can only close from the receive side.
+        self.peer_send_channel = peer_send
+        self.dead_peer_send_channel = dead_peer_send
         self.peer_receive_channel = peer_receive
         self.dead_peer_receive_channel = dead_peer_receive
         self._validator_semaphore = trio.Semaphore(max_concurrent_validator_count)
-        # Register a notifee
-        self.host.get_network().register_notifee(
-            PubsubNotifee(peer_send, dead_peer_send)
-        )
-
         # Register stream handlers for each pubsub router protocol to handle
         # the pubsub streams opened on those protocols
         for protocol in router.get_protocols():
@@ -221,9 +222,45 @@ class Pubsub(Service, IPubsub):
         self.event_handle_dead_peer_queue_started = trio.Event()
 
     async def run(self) -> None:
+        event_bus = self.host.get_network().get_event_bus()
+        connected = await event_bus.subscribe(EventConnected)
+        disconnected = await event_bus.subscribe(EventDisconnected)
         self.manager.run_daemon_task(self.handle_peer_queue)
         self.manager.run_daemon_task(self.handle_dead_peer_queue)
-        await self.manager.wait_finished()
+        self.manager.run_daemon_task(self._consume_connected_events, connected)
+        self.manager.run_daemon_task(self._consume_disconnected_events, disconnected)
+        try:
+            await self.manager.wait_finished()
+        finally:
+            await connected.unsubscribe()
+            await disconnected.unsubscribe()
+
+    async def _consume_connected_events(
+        self, subscription: EventSubscription[EventConnected]
+    ) -> None:
+        async for event in subscription:
+            try:
+                await self._send_peer_event(
+                    self.peer_send_channel, event.conn.muxed_conn.peer_id
+                )
+            except trio.BrokenResourceError:
+                return
+
+    async def _consume_disconnected_events(
+        self, subscription: EventSubscription[EventDisconnected]
+    ) -> None:
+        async for event in subscription:
+            try:
+                await self._send_peer_event(
+                    self.dead_peer_send_channel, event.conn.muxed_conn.peer_id
+                )
+            except trio.BrokenResourceError:
+                return
+
+    async def _send_peer_event(
+        self, channel: trio.MemorySendChannel[ID], peer_id: ID
+    ) -> None:
+        await channel.send(peer_id)
 
     @property
     def my_id(self) -> ID:

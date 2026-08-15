@@ -74,11 +74,12 @@ as the first step.
    the same host signals. The existing notifee surface now emits connection,
    disconnection, stream-open, stream-close, listen, and listen-close events from the
    swarm lifecycle, and ``libp2p.network.events.EventBus`` provides typed
-   subscription/filter semantics for the same events.
+   subscription/filter semantics for the same events. Pubsub now consumes typed
+   connected/disconnected events directly and retains its existing peer queues.
 
    Remaining parity work:
 
-   * Migrate identify, AutoNAT, pubsub, connection manager, and resource manager
+   * Migrate identify, AutoNAT, connection manager, and remaining resource-manager
      integration points onto the shared event surface where appropriate.
    * Extend event ordering/backpressure coverage as more services consume the bus.
    *Status: in progress. Effort remaining: low. Risk: low. Depends on: connmgr.*
