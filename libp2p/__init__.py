@@ -277,6 +277,7 @@ def new_host(
     listen_addrs: Sequence[multiaddr.Multiaddr] | None = None,
     enable_mDNS: bool = False,
     enable_autonat: bool = False,
+    enable_hole_punching: bool = False,
     bootstrap: list[str] | None = None,
     conn_manager: INotifee | None = None,
     negotiate_timeout: int = DEFAULT_NEGOTIATE_TIMEOUT,
@@ -294,6 +295,7 @@ def new_host(
     :param listen_addrs: optional list of multiaddrs to listen on
     :param enable_mDNS: whether to enable mDNS discovery
     :param enable_autonat: whether to register the AutoNAT protocol service
+    :param enable_hole_punching: whether to register the DCUtR service
     :param bootstrap: optional list of bootstrap peer addresses as strings
     :param conn_manager: optional network notifee for connection management
     :return: return a host instance
@@ -316,6 +318,7 @@ def new_host(
             bootstrap=bootstrap,
             conn_manager=conn_manager,
             enable_autonat=enable_autonat,
+            enable_hole_punching=enable_hole_punching,
         )
     return BasicHost(
         network=swarm,
@@ -324,6 +327,7 @@ def new_host(
         conn_manager=conn_manager,
         negotitate_timeout=negotiate_timeout,
         enable_autonat=enable_autonat,
+        enable_hole_punching=enable_hole_punching,
     )
 
 __version__ = __version("libp2p")

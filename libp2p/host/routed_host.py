@@ -27,6 +27,7 @@ class RoutedHost(BasicHost):
         bootstrap: list[str] | None = None,
         conn_manager: INotifee | None = None,
         enable_autonat: bool = False,
+        enable_hole_punching: bool = False,
     ):
         super().__init__(
             network,
@@ -34,6 +35,7 @@ class RoutedHost(BasicHost):
             bootstrap=bootstrap,
             conn_manager=conn_manager,
             enable_autonat=enable_autonat,
+            enable_hole_punching=enable_hole_punching,
         )
         self._router = router
 
