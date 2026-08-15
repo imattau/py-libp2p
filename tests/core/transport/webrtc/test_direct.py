@@ -1,3 +1,4 @@
+import base64
 import hashlib
 
 import pytest
@@ -34,3 +35,19 @@ def test_rejects_malformed_direct_address() -> None:
         WebRTCDirectAddress.parse(
             "/ip4/127.0.0.1/udp/4001/p2p-webrtc-direct/certhash/nope/p2p/QmPeer"
         )
+
+
+def test_parse_supports_spec_webrtc_direct_and_base64url_certhash() -> None:
+    certificate = b"base64-certificate"
+    peer_id = create_new_key_pair(b"3" * 32).public_key
+    digest = b"\x12\x20" + hashlib.sha256(certificate).digest()
+    certhash = "u" + base64.urlsafe_b64encode(digest).decode().rstrip("=")
+    peer = str(ID.from_pubkey(peer_id))
+    address = (
+        f"/ip4/127.0.0.1/udp/4001/webrtc-direct/certhash/{certhash}/p2p/{peer}"
+    )
+
+    parsed = WebRTCDirectAddress.parse(address)
+
+    assert str(parsed) == address
+    assert parsed.certificate_matches(certificate)
