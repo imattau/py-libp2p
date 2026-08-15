@@ -31,6 +31,7 @@ from libp2p.relay.circuit_v2.framing import (
 )
 from libp2p.relay.circuit_v2.pb.circuit_pb2 import (
     HopMessage,
+    Reservation,
     Status,
 )
 from libp2p.relay.circuit_v2.protocol import (
@@ -144,6 +145,7 @@ async def test_circuit_v2_transport_separates_reservation_and_connect_streams():
         status = encode_message(HopMessage(
             type=HopMessage.STATUS,
             status=Status(code=Status.OK),
+            reservation=Reservation(expire=int(time.time()) + 60),
         ).SerializeToString())
         reservation_stream.read.side_effect = [status[:1], status[1:]]
         circuit_stream.read.side_effect = [status[:1], status[1:]]

@@ -331,8 +331,30 @@ class CircuitV2Transport(ITransport):
                 )
                 return False
 
-            # Store reservation info
-            # TODO: Implement reservation storage and refresh mechanism
+            if not resp.HasField("reservation"):
+                logger.warning(
+                    "Relay %s returned OK without reservation details",
+                    relay_peer_id,
+                )
+                return False
+
+            reservation = resp.reservation
+            if not reservation.HasField("expire") or reservation.expire <= 0:
+                logger.warning(
+                    "Relay %s returned an invalid reservation expiry",
+                    relay_peer_id,
+                )
+                return False
+
+            relay_info = self.discovery.get_relay_info(relay_peer_id)
+            if relay_info is not None:
+                relay_info.has_reservation = True
+                relay_info.reservation_expires_at = reservation.expire
+                relay_info.reservation_data_limit = (
+                    resp.limit.data if resp.HasField("limit") else None
+                )
+                relay_info.reservation_voucher = reservation.voucher or None
+
             return True
 
         except Exception as e:
