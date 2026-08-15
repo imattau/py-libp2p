@@ -1,7 +1,7 @@
 import pytest
 
 from libp2p.transport.quic.dispatcher import QuicDatagramDispatcher
-from libp2p.transport.quic.events import QuicStreamData
+from libp2p.transport.quic.events import QuicConnectionClosed, QuicStreamData
 
 
 class FakeConnection:
@@ -56,6 +56,17 @@ async def test_dispatcher_ignores_unknown_addresses():
     dispatcher = QuicDatagramDispatcher(FakeSocket())
 
     assert not await dispatcher.handle_datagram(b"packet", ("127.0.0.1", 9))
+
+
+@pytest.mark.trio
+async def test_dispatcher_unregisters_closed_connections():
+    dispatcher = QuicDatagramDispatcher(FakeSocket())
+    connection = FakeConnection()
+    connection.events = [QuicConnectionClosed(1, None, "closed")]
+    dispatcher.register(("127.0.0.1", 4), connection, lambda event: None)
+
+    assert await dispatcher.handle_datagram(b"packet", ("127.0.0.1", 4))
+    assert ("127.0.0.1", 4) not in dispatcher._routes
 
 
 @pytest.mark.trio

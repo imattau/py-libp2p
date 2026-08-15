@@ -8,7 +8,7 @@ from .backend import (
     drain_events,
     flush_datagrams,
 )
-from .events import normalize_event
+from .events import QuicConnectionClosed, normalize_event
 
 
 class QuicDatagramDispatcher:
@@ -65,11 +65,18 @@ class QuicDatagramDispatcher:
         tls = getattr(connection, "tls", None)
         if tls is not None and not connection.configuration.is_client:
             tls._request_client_certificate = True
-        drain_events(
-            connection,
-            lambda event: handle_event(normalize_event(event)),
-        )
+        closed = False
+
+        def dispatch_event(event: Any) -> None:
+            nonlocal closed
+            normalized = normalize_event(event)
+            closed = closed or isinstance(normalized, QuicConnectionClosed)
+            handle_event(normalized)
+
+        drain_events(connection, dispatch_event)
         await self.flush_connection(addr, timestamp)
+        if closed:
+            self.unregister(addr)
         return True
 
     async def flush_connection(self, addr: Any, now: float | None = None) -> int:
