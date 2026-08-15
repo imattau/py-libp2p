@@ -1,3 +1,5 @@
+import secrets
+
 from multiaddr import Multiaddr
 import trio
 
@@ -22,6 +24,7 @@ class QuicDialer:
         config: QuicTransportConfig | None = None,
         expected_peer_id: ID | None = None,
         local_address: tuple[str, int] | None = None,
+        punch_target: tuple[str, int] | None = None,
     ) -> QuicConnectionAdapter:
         local_host, local_port = local_address or ("127.0.0.1", 0)
         socket = await TrioQuicDatagramSocket.bind(
@@ -31,7 +34,15 @@ class QuicDialer:
         connection.connect((host, port), trio.current_time())
         adapter = QuicConnectionAdapter(connection, object())
         nursery.start_soon(adapter.run, socket, config)
-        await adapter.wait_handshake()
+        stop_punching = trio.Event()
+        if punch_target is not None:
+            nursery.start_soon(
+                self._send_punch_packets, socket, punch_target, stop_punching
+            )
+        try:
+            await adapter.wait_handshake()
+        finally:
+            stop_punching.set()
         if expected_peer_id is not None and adapter.remote_peer_id != expected_peer_id:
             await adapter.close()
             raise ValueError(
@@ -47,6 +58,7 @@ class QuicDialer:
         config: QuicTransportConfig | None = None,
         expected_peer_id: ID | None = None,
         local_address: tuple[str, int] | None = None,
+        punch: bool = False,
     ) -> QuicConnectionAdapter:
         host = maddr.value_for_protocol("ip4")
         port = maddr.value_for_protocol("udp")
@@ -60,6 +72,7 @@ class QuicDialer:
             config,
             expected_peer_id,
             local_address,
+            (host, int(port)) if punch else None,
         )
 
     async def dial_hole_punch(
@@ -78,4 +91,12 @@ class QuicDialer:
             config,
             expected_peer_id,
             local_address,
+            punch=True,
         )
+
+    @staticmethod
+    async def _send_punch_packets(socket, target, stop: trio.Event) -> None:
+        while not stop.is_set():
+            await socket.sendto(secrets.token_bytes(32), target)
+            with trio.move_on_after(0.2):
+                await stop.wait()

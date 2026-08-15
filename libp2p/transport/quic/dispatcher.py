@@ -53,7 +53,10 @@ class QuicDatagramDispatcher:
     ) -> bool:
         route = self._routes.get(addr)
         if route is None and self.on_unknown is not None:
-            route = await self.on_unknown(addr, data)
+            try:
+                route = await self.on_unknown(addr, data)
+            except (ValueError, IndexError):
+                return False
             if route is not None:
                 self._routes[addr] = route
         if route is None:

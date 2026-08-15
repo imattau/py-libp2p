@@ -153,9 +153,9 @@ The highest-impact end-user feature. Several pieces already exist as prototypes.
     The native Trio service now implements bounded ``/libp2p/dcutr`` framing,
     CONNECT/SYNC coordination, relay-event activation, RTT synchronization,
     retries, and direct-connection replacement in the swarm. Remaining work is
-    TCP simultaneous-open socket reuse is now wired through the native TCP
-    transport. Remaining work is QUIC hole-punch packet handling, validation
-    across real NAT topologies, and P7 cross-implementation testing.
+    TCP simultaneous-open socket reuse and QUIC packet-level probing are now
+    wired through the native transports. Remaining work is validation across
+    real NAT topologies and P7 cross-implementation testing.
     *Status: coordination and connection upgrade complete for the current scope;
     transport hole punching and interop pending. Effort remaining: high. Risk:
     high. Depends on: 12, 13.*
