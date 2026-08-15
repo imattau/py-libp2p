@@ -38,7 +38,7 @@ def _encode_signed_key(public_key: bytes, signature: bytes) -> bytes:
 
 
 def _decode_der_octet_string(data: bytes, offset: int) -> tuple[bytes, int]:
-    if offset >= len(data) or data[offset] != 0x04:
+    if offset + 1 >= len(data) or data[offset] != 0x04:
         raise ValueError("invalid libp2p TLS public-key extension")
     length = data[offset + 1]
     offset += 2

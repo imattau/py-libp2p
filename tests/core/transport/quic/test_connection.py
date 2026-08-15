@@ -127,3 +127,30 @@ def test_peer_id_from_certificate_rejects_invalid_certificate_signature():
 
     with pytest.raises(ValueError, match="certificate signature"):
         peer_id_from_certificate(invalid_certificate)
+
+
+def test_peer_id_from_certificate_rejects_truncated_signed_key():
+    certificate, certificate_key = create_libp2p_certificate(
+        create_new_key_pair(seed=b"r" * 32)
+    )
+    extension = certificate.extensions.get_extension_for_oid(
+        LIBP2P_PUBLIC_KEY_EXTENSION
+    )
+    truncated = extension.value.value[:-1]
+    malformed_certificate = (
+        x509.CertificateBuilder()
+        .subject_name(certificate.subject)
+        .issuer_name(certificate.issuer)
+        .public_key(certificate.public_key())
+        .serial_number(certificate.serial_number)
+        .not_valid_before(certificate.not_valid_before_utc)
+        .not_valid_after(certificate.not_valid_after_utc)
+        .add_extension(
+            x509.UnrecognizedExtension(LIBP2P_PUBLIC_KEY_EXTENSION, truncated),
+            critical=True,
+        )
+        .sign(certificate_key, hashes.SHA256())
+    )
+
+    with pytest.raises(ValueError, match="signed-key|public-key extension"):
+        peer_id_from_certificate(malformed_certificate)
