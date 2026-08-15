@@ -5,6 +5,7 @@ from google.protobuf.message import (
     DecodeError,
 )
 from multiaddr import Multiaddr
+import trio
 
 from libp2p.custom_types import (
     TProtocol,
@@ -15,6 +16,7 @@ from libp2p.host.autonat.pb.autonat_pb2 import (
 from libp2p.host.basic_host import (
     BasicHost,
 )
+from libp2p.io.utils import read_exactly
 from libp2p.network.stream.net_stream import (
     NetStream,
 )
@@ -25,12 +27,15 @@ from libp2p.peer.peerstore import (
     IPeerStore,
 )
 from libp2p.utils.varint import (
+    decode_uvarint_from_stream,
     encode_varint_prefixed,
     read_varint_prefixed_bytes,
 )
 
 AUTONAT_PROTOCOL_ID = TProtocol("/libp2p/autonat/1.0.0")
 AUTONAT_MIN_RESPONSES = 4
+MAX_AUTONAT_MESSAGE_SIZE = 4096
+MAX_CONCURRENT_DIALS = 4
 
 logger = logging.getLogger("libp2p.host.autonat")
 
@@ -76,6 +81,7 @@ class AutoNATService:
         self.peerstore: IPeerStore = host.get_peerstore()
         self.status = AutoNATStatus.UNKNOWN
         self.dial_results: dict[ID, bool] = {}
+        self._dial_limiter = trio.CapacityLimiter(MAX_CONCURRENT_DIALS)
         host.set_stream_handler(AUTONAT_PROTOCOL_ID, self.handle_stream)
 
     async def handle_stream(self, stream: NetStream) -> None:
@@ -89,7 +95,7 @@ class AutoNATService:
 
         """
         try:
-            request_bytes = await read_varint_prefixed_bytes(stream)
+            request_bytes = await self._read_message(stream)
             request = Message()
             try:
                 request.ParseFromString(request_bytes)
@@ -104,6 +110,10 @@ class AutoNATService:
                 response.dialResponse.status = Message.E_DIAL_REFUSED
             else:
                 response = await self._handle_request(request, remote_address)
+            await stream.write(encode_varint_prefixed(response.SerializeToString()))
+        except ValueError:
+            response = Message(type=Message.DIAL_RESPONSE)
+            response.dialResponse.status = Message.E_BAD_REQUEST
             await stream.write(encode_varint_prefixed(response.SerializeToString()))
         except Exception as e:
             logger.error("Error handling AutoNAT stream: %s", str(e))
@@ -203,7 +213,8 @@ class AutoNATService:
             return response
         if addresses:
             self.peerstore.add_addrs(peer_id, addresses, 60_000)
-        success = await self._try_dial(peer_id)
+        async with self._dial_limiter:
+            success = await self._try_dial(peer_id)
         self.dial_results[peer_id] = success
         response.dialResponse.status = Message.OK if success else Message.E_DIAL_ERROR
         if success and addresses:
@@ -232,6 +243,13 @@ class AutoNATService:
             return True
         except Exception:
             return False
+
+    async def _read_message(self, stream: NetStream) -> bytes:
+        """Read one bounded length-delimited AutoNAT message."""
+        message_length = await decode_uvarint_from_stream(stream)
+        if message_length > MAX_AUTONAT_MESSAGE_SIZE:
+            raise ValueError("AutoNAT message exceeds maximum size")
+        return await read_exactly(stream, message_length)
 
     def get_status(self) -> int:
         """

@@ -360,3 +360,13 @@ async def test_handle_stream():
             encode_varint_prefixed(malformed.SerializeToString())
         )
         mock_stream.close.assert_called_once()
+
+        # Oversized length-delimited messages must be rejected before allocation.
+        mock_stream.reset_mock()
+        oversized_request = encode_varint_prefixed(b"x" * 4097)
+        mock_stream.read.side_effect = [oversized_request[:1], oversized_request[1:2]]
+        await autonat_service.handle_stream(mock_stream)
+        mock_stream.write.assert_called_once_with(
+            encode_varint_prefixed(malformed.SerializeToString())
+        )
+        mock_stream.close.assert_called_once()
