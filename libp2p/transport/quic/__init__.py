@@ -17,6 +17,7 @@ from .events import (
     QuicStreamData,
 )
 from .stream import QuicStream
+from .stream_manager import QuicStreamManager
 
 __all__ = (
     "QUIC_V1_MULTIADDR_PROTOCOL",
@@ -28,6 +29,7 @@ __all__ = (
     "QuicHandshakeComplete",
     "QuicStreamData",
     "QuicStream",
+    "QuicStreamManager",
     "create_libp2p_certificate",
     "create_quic_connection",
 )
