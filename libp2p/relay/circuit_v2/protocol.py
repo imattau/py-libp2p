@@ -515,6 +515,10 @@ class CircuitV2Protocol(Service):
 
             # The STOP handler owns the forwarding nursery after the handshake
             # completes so the two relay streams have a single reader each.
+            circuit_data_used = {
+                "source_to_destination": 0,
+                "destination_to_source": 0,
+            }
             relay_scope = (
                 trio.move_on_after(self.limits.duration)
                 if self.limits.duration > 0
@@ -528,6 +532,7 @@ class CircuitV2Protocol(Service):
                         stream,
                         destination_peer_id,
                         relay_key,
+                        circuit_data_used,
                         "source_to_destination",
                     )
                     nursery.start_soon(
@@ -536,6 +541,7 @@ class CircuitV2Protocol(Service):
                         src_stream,
                         destination_peer_id,
                         relay_key,
+                        circuit_data_used,
                         "destination_to_source",
                     )
             if relay_scope.cancelled_caught:
@@ -817,6 +823,7 @@ class CircuitV2Protocol(Service):
         dst_stream: INetStream,
         reservation_peer_id: ID,
         active_relay_key: tuple[ID, ID],
+        circuit_data_used: dict[str, int],
         direction: str,
     ) -> None:
         """
@@ -832,6 +839,8 @@ class CircuitV2Protocol(Service):
             ID of the reserved destination peer
         active_relay_key : tuple[ID, ID]
             Source and destination IDs used to match the STOP stream
+        circuit_data_used : dict[str, int]
+            Directional usage counters for this circuit
         direction : str
             Directional data counter to apply to this relay leg
 
@@ -870,9 +879,9 @@ class CircuitV2Protocol(Service):
                         break
                     try:
                         reservation.data_used += len(data)
-                        reservation.data_used_by_direction[direction] += len(data)
+                        circuit_data_used[direction] += len(data)
                         if (
-                            reservation.data_used_by_direction[direction]
+                            circuit_data_used[direction]
                             >= reservation.limits.data
                         ):
                             logger.warning(
