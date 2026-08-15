@@ -886,6 +886,8 @@ class CircuitV2Protocol(Service):
                         reservation.data_used += len(data)
                         circuit_data_used[direction] += len(data)
                         if (
+                            reservation.limits.data > 0
+                            and
                             circuit_data_used[direction]
                             >= reservation.limits.data
                         ):
