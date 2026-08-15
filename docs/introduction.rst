@@ -32,7 +32,7 @@ Current Capabilities
 
 Py-libp2p currently supports these core libp2p features:
 
-* **Transports**: TCP, QUIC (near completion, in final testing phase)
+* **Transports**: TCP, native QUIC v1 (interoperability validation pending)
 * **Protocols**: Gossipsub v1.1, Identify, Ping
 * **Security**: Noise protocol framework
 * **Connection Management**: Connection multiplexing

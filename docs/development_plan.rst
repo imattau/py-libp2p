@@ -32,8 +32,8 @@ as the first step.
 
 1. **Fix stale documentation.**
    The README matrix and :doc:`introduction` still describe an older state (they mark
-   kad-dht, discovery, relay, autonat, and identify-push as missing, and claim QUIC is
-   "near completion"). Bring them in line with the actual code.
+   kad-dht, discovery, relay, and autonat as missing and do not reflect the native
+   QUIC v1 implementation). Bring them in line with the actual code.
    *Status: done. Effort: low. Risk: none.*
 
 2. **Connection manager — initial port landed.**
@@ -101,8 +101,11 @@ dependency.
    are used directly, without the existing security and muxer upgrade layers;
    libp2p peer identity is authenticated through the TLS 1.3 certificate.
    Start with QUIC v1 and defer draft-29 support.
-   *Effort: high. Risk: medium. Depends on: Trio decision (P0), peer identity
-   certificate support (P2).*
+   The native Trio implementation now covers listener/dialer lifecycle, TLS identity,
+   direct QUIC streams, swarm integration, and QUIC v1 peer multiaddrs. Remaining
+   work is interoperability validation and production hardening in P7.
+   *Status: native implementation complete for the current scope; interop pending.
+   Effort remaining: medium. Risk: medium.*
 
 10. **TLS secure channel.**
    Implement ``libp2p-tls`` per the spec so Noise is not the only production security
