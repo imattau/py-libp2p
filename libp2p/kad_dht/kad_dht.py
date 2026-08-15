@@ -193,8 +193,16 @@ class KadDHT(Service):
                     f"Received DHT message from {peer_id}, type: {message.type}"
                 )
 
+                # Handle PING messages used by routing-table liveness checks.
+                if message.type == Message.MessageType.PING:
+                    response_bytes = Message(
+                        type=Message.MessageType.PING
+                    ).SerializeToString()
+                    await stream.write(varint.encode(len(response_bytes)))
+                    await stream.write(response_bytes)
+
                 # Handle FIND_NODE message
-                if message.type == Message.MessageType.FIND_NODE:
+                elif message.type == Message.MessageType.FIND_NODE:
                     # Get target key directly from protobuf
                     target_key = message.key
 

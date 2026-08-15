@@ -22,6 +22,10 @@ from libp2p.peer.id import (
 from libp2p.peer.peerinfo import (
     PeerInfo,
 )
+from libp2p.utils.varint import (
+    decode_uvarint_from_stream,
+    encode_varint_prefixed,
+)
 
 from .common import (
     PROTOCOL_ID,
@@ -253,23 +257,16 @@ class KBucket:
                 ping_msg = Message()
                 ping_msg.type = Message.PING  # Use correct enum
 
-                # Serialize and send with length prefix (4 bytes big-endian)
+                # Serialize and send with the Kademlia varint length prefix.
                 msg_bytes = ping_msg.SerializeToString()
                 logger.debug(
                     f"Sending PING message to {peer_id}, size: {len(msg_bytes)} bytes"
                 )
-                await stream.write(len(msg_bytes).to_bytes(4, byteorder="big"))
-                await stream.write(msg_bytes)
+                await stream.write(encode_varint_prefixed(msg_bytes))
 
                 # Wait for response with timeout
                 with trio.move_on_after(2):  # 2 second timeout
-                    # Read response length (4 bytes)
-                    length_bytes = await stream.read(4)
-                    if not length_bytes or len(length_bytes) < 4:
-                        logger.warning(f"Peer {peer_id} disconnected during ping")
-                        return False
-
-                    msg_len = int.from_bytes(length_bytes, byteorder="big")
+                    msg_len = await decode_uvarint_from_stream(stream)
                     if (
                         msg_len <= 0 or msg_len > 1024 * 1024
                     ):  # Sanity check on message size
