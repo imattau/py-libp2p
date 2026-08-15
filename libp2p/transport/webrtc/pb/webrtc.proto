@@ -1,0 +1,15 @@
+syntax = "proto2";
+
+package webrtc.pb;
+
+message Message {
+  enum Flag {
+    FIN = 0;
+    STOP_SENDING = 1;
+    RESET_STREAM = 2;
+    FIN_ACK = 3;
+  }
+
+  optional Flag flag = 1;
+  optional bytes message = 2;
+}

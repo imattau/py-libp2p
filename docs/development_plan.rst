@@ -129,6 +129,15 @@ dependency.
    *Status: native implementation complete for the current scope; interop and
    production hardening pending. Effort remaining: medium. Risk: medium.*
 
+11a. **WebRTC shared transport foundation.**
+     The native implementation now includes the shared WebRTC protobuf framing,
+     incomplete-varint handling, 16 KiB message cap, and FIN/STOP/RESET/FIN_ACK
+     control-frame model used by both WebRTC Direct and private-to-private WebRTC.
+     Integrating an asyncio-based WebRTC engine behind the Trio boundary, WebRTC
+     Direct certificate-address handling, and relay-assisted SDP signaling remain.
+     *Status: framing foundation complete; transport implementations pending.
+     Effort remaining: high. Risk: high.*
+
 P3 — NAT traversal
 ~~~~~~~~~~~~~~~~~~
 
