@@ -1,6 +1,9 @@
 from collections.abc import Sequence
 import logging
 
+from google.protobuf.message import (
+    DecodeError,
+)
 from multiaddr import Multiaddr
 
 from libp2p.custom_types import (
@@ -88,7 +91,13 @@ class AutoNATService:
         try:
             request_bytes = await read_varint_prefixed_bytes(stream)
             request = Message()
-            request.ParseFromString(request_bytes)
+            try:
+                request.ParseFromString(request_bytes)
+            except DecodeError:
+                response = Message(type=Message.DIAL_RESPONSE)
+                response.dialResponse.status = Message.E_BAD_REQUEST
+                await stream.write(encode_varint_prefixed(response.SerializeToString()))
+                return
             remote_address = stream.get_remote_address()
             if request.type == Message.DIAL and remote_address is None:
                 response = Message(type=Message.DIAL_RESPONSE)

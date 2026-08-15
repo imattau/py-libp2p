@@ -334,3 +334,15 @@ async def test_handle_stream():
             encode_varint_prefixed(refused.SerializeToString())
         )
         mock_stream.close.assert_called_once()
+
+        # Length-delimited but invalid protobuf payloads must be rejected.
+        mock_stream.reset_mock()
+        invalid_request = encode_varint_prefixed(b"not-a-protobuf")
+        mock_stream.read.side_effect = [invalid_request[:1], invalid_request[1:]]
+        malformed = Message(type=Message.DIAL_RESPONSE)
+        malformed.dialResponse.status = Message.E_BAD_REQUEST
+        await autonat_service.handle_stream(mock_stream)
+        mock_stream.write.assert_called_once_with(
+            encode_varint_prefixed(malformed.SerializeToString())
+        )
+        mock_stream.close.assert_called_once()
