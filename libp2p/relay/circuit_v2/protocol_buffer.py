@@ -17,14 +17,15 @@ from .pb.circuit_pb2 import Status as PbStatus
 
 # Define Status codes as an Enum for better type safety and organization
 class StatusCode(IntEnum):
-    OK = 0
-    RESERVATION_REFUSED = 100
-    RESOURCE_LIMIT_EXCEEDED = 101
-    PERMISSION_DENIED = 102
-    CONNECTION_FAILED = 200
-    DIAL_REFUSED = 201
-    STOP_FAILED = 300
+    UNUSED = 0
+    OK = 100
+    RESERVATION_REFUSED = 200
+    RESOURCE_LIMIT_EXCEEDED = 201
+    PERMISSION_DENIED = 202
+    CONNECTION_FAILED = 203
+    NO_RESERVATION = 204
     MALFORMED_MESSAGE = 400
+    UNEXPECTED_MESSAGE = 401
     INTERNAL_ERROR = 500
 
 

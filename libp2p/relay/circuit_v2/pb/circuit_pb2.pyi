@@ -150,24 +150,26 @@ class Status(google.protobuf.message.Message):
 
     class _CodeEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[Status._Code.ValueType], builtins.type):
         DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
-        OK: Status._Code.ValueType  # 0
-        RESERVATION_REFUSED: Status._Code.ValueType  # 100
-        RESOURCE_LIMIT_EXCEEDED: Status._Code.ValueType  # 101
-        PERMISSION_DENIED: Status._Code.ValueType  # 102
-        CONNECTION_FAILED: Status._Code.ValueType  # 200
-        DIAL_REFUSED: Status._Code.ValueType  # 201
-        STOP_FAILED: Status._Code.ValueType  # 300
+        UNUSED: Status._Code.ValueType  # 0
+        OK: Status._Code.ValueType  # 100
+        RESERVATION_REFUSED: Status._Code.ValueType  # 200
+        RESOURCE_LIMIT_EXCEEDED: Status._Code.ValueType  # 201
+        PERMISSION_DENIED: Status._Code.ValueType  # 202
+        CONNECTION_FAILED: Status._Code.ValueType  # 203
+        NO_RESERVATION: Status._Code.ValueType  # 204
         MALFORMED_MESSAGE: Status._Code.ValueType  # 400
+        UNEXPECTED_MESSAGE: Status._Code.ValueType  # 401
 
     class Code(_Code, metaclass=_CodeEnumTypeWrapper): ...
-    OK: Status.Code.ValueType  # 0
-    RESERVATION_REFUSED: Status.Code.ValueType  # 100
-    RESOURCE_LIMIT_EXCEEDED: Status.Code.ValueType  # 101
-    PERMISSION_DENIED: Status.Code.ValueType  # 102
-    CONNECTION_FAILED: Status.Code.ValueType  # 200
-    DIAL_REFUSED: Status.Code.ValueType  # 201
-    STOP_FAILED: Status.Code.ValueType  # 300
+    UNUSED: Status.Code.ValueType  # 0
+    OK: Status.Code.ValueType  # 100
+    RESERVATION_REFUSED: Status.Code.ValueType  # 200
+    RESOURCE_LIMIT_EXCEEDED: Status.Code.ValueType  # 201
+    PERMISSION_DENIED: Status.Code.ValueType  # 202
+    CONNECTION_FAILED: Status.Code.ValueType  # 203
+    NO_RESERVATION: Status.Code.ValueType  # 204
     MALFORMED_MESSAGE: Status.Code.ValueType  # 400
+    UNEXPECTED_MESSAGE: Status.Code.ValueType  # 401
 
     CODE_FIELD_NUMBER: builtins.int
     MESSAGE_FIELD_NUMBER: builtins.int
