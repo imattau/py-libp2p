@@ -110,6 +110,13 @@ class AiortcWebRTCEngine:
         peer_connection = self._require_peer_connection()
         await self.bridge.call(_add_ice_candidate, peer_connection, candidate)
 
+    async def add_ice_candidate_data(self, candidate: dict[str, Any]) -> None:
+        """Parse a signaling candidate and pass it to aiortc."""
+        peer_connection = self._require_peer_connection()
+        await self.bridge.call(
+            _add_ice_candidate_data, peer_connection, candidate
+        )
+
     async def on_data_channel(self, handler: Any) -> None:
         """Register a Trio-facing callback for remotely-created channels."""
         peer_connection = self._require_peer_connection()
@@ -138,6 +145,7 @@ def _load_aiortc() -> tuple[Any, Any, Any]:
     try:
         from aiortc import (
             RTCConfiguration,
+            RTCIceCandidate,
             RTCIceServer,
             RTCPeerConnection,
             RTCSessionDescription,
@@ -146,12 +154,16 @@ def _load_aiortc() -> tuple[Any, Any, Any]:
         raise WebRTCDependencyError(
             "WebRTC support requires the optional 'aiortc' dependency"
         ) from error
-    return RTCPeerConnection, RTCSessionDescription, (RTCConfiguration, RTCIceServer)
+    return RTCPeerConnection, RTCSessionDescription, (
+        RTCConfiguration,
+        RTCIceServer,
+        RTCIceCandidate,
+    )
 
 
 def _new_peer_connection(ice_servers: tuple[str, ...]) -> Any:
     RTCPeerConnection, _, configuration_types = _load_aiortc()
-    RTCConfiguration, RTCIceServer = configuration_types
+    RTCConfiguration, RTCIceServer, _ = configuration_types
     configuration = RTCConfiguration(
         iceServers=[RTCIceServer(urls=url) for url in ice_servers]
     )
@@ -193,6 +205,49 @@ def _create_data_channel(
 
 async def _add_ice_candidate(peer_connection: Any, candidate: Any) -> None:
     await peer_connection.addIceCandidate(candidate)
+
+
+async def _add_ice_candidate_data(
+    peer_connection: Any, candidate_data: dict[str, Any]
+) -> None:
+    _, _, configuration_types = _load_aiortc()
+    RTCIceCandidate = configuration_types[2]
+    candidate = _candidate_from_data(candidate_data, RTCIceCandidate)
+    await peer_connection.addIceCandidate(candidate)
+
+
+def _candidate_from_data(candidate_data: dict[str, Any], candidate_type: Any) -> Any:
+    """Build aiortc's candidate object from the browser JSON representation."""
+    candidate_sdp = candidate_data.get("candidate")
+    if not isinstance(candidate_sdp, str):
+        raise ValueError("ICE candidate data requires a candidate string")
+    if not candidate_sdp:
+        return None
+    parts = candidate_sdp.removeprefix("candidate:").split()
+    if len(parts) < 8 or parts[6] != "typ":
+        raise ValueError("invalid ICE candidate SDP")
+    values: dict[str, Any] = {
+        "foundation": parts[0],
+        "component": int(parts[1]),
+        "protocol": parts[2].lower(),
+        "priority": int(parts[3]),
+        "ip": parts[4],
+        "port": int(parts[5]),
+        "type": parts[7],
+        "sdpMid": candidate_data.get("sdpMid"),
+        "sdpMLineIndex": candidate_data.get("sdpMLineIndex"),
+        "usernameFragment": candidate_data.get("usernameFragment"),
+    }
+    attributes = dict(zip(parts[8::2], parts[9::2]))
+    values["relatedAddress"] = attributes.get("raddr")
+    values["relatedPort"] = (
+        int(attributes["rport"]) if "rport" in attributes else None
+    )
+    values["tcpType"] = attributes.get("tcptype")
+    try:
+        return candidate_type(**values)
+    except (TypeError, ValueError) as error:
+        raise ValueError("invalid ICE candidate fields") from error
 
 
 def _register_message_handler(channel: Any, handler: Any) -> None:
