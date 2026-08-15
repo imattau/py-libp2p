@@ -10,6 +10,10 @@ from cryptography.hazmat.primitives.asymmetric import (
     padding,
     rsa,
 )
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    PublicFormat,
+)
 from cryptography.x509.oid import NameOID, ObjectIdentifier
 
 from libp2p.crypto.keys import KeyPair
@@ -121,7 +125,10 @@ def peer_id_from_certificate(certificate: x509.Certificate) -> ID:
         raise ValueError("invalid libp2p TLS signed-key fields")
 
     public_key = deserialize_public_key(public_key_bytes)
-    handshake_data = LIBP2P_TLS_HANDSHAKE_PREFIX + public_key_bytes
+    certificate_public_key = certificate.public_key().public_bytes(
+        Encoding.DER, PublicFormat.SubjectPublicKeyInfo
+    )
+    handshake_data = LIBP2P_TLS_HANDSHAKE_PREFIX + certificate_public_key
     try:
         valid = public_key.verify(handshake_data, signature)
     except Exception as error:
@@ -134,11 +141,14 @@ def peer_id_from_certificate(certificate: x509.Certificate) -> ID:
 def create_libp2p_certificate(key_pair: KeyPair) -> tuple[x509.Certificate, Any]:
     """Create a self-signed certificate carrying a libp2p host identity."""
     host_public_key = key_pair.public_key.serialize()
-    handshake_data = LIBP2P_TLS_HANDSHAKE_PREFIX + host_public_key
+    certificate_key = ec.generate_private_key(ec.SECP256R1())
+    certificate_public_key = certificate_key.public_key().public_bytes(
+        Encoding.DER, PublicFormat.SubjectPublicKeyInfo
+    )
+    handshake_data = LIBP2P_TLS_HANDSHAKE_PREFIX + certificate_public_key
     host_signature = key_pair.private_key.sign(handshake_data)
     extension = _encode_signed_key(host_public_key, host_signature)
 
-    certificate_key = ec.generate_private_key(ec.SECP256R1())
     now = datetime.now(timezone.utc)
     name = x509.Name([x509.NameAttribute(NameOID.ORGANIZATION_NAME, "libp2p.io")])
     certificate = (

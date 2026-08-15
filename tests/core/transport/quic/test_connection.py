@@ -2,7 +2,11 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.serialization import Encoding
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    PublicFormat,
+)
+from cryptography.x509 import load_der_x509_certificate
 
 from libp2p.crypto.ed25519 import create_new_key_pair
 from libp2p.security.tls.certificate import LIBP2P_CERTIFICATE_VALIDITY
@@ -54,7 +58,10 @@ def test_create_libp2p_certificate_carries_signed_host_key():
     assert offset == len(signed_key)
     assert public_key == key_pair.public_key.serialize()
     assert key_pair.public_key.verify(
-        LIBP2P_TLS_HANDSHAKE_PREFIX + key_pair.public_key.serialize(),
+        LIBP2P_TLS_HANDSHAKE_PREFIX
+        + certificate_key.public_key().public_bytes(
+            Encoding.DER, PublicFormat.SubjectPublicKeyInfo
+        ),
         signature,
     )
 
@@ -154,3 +161,28 @@ def test_peer_id_from_certificate_rejects_truncated_signed_key():
 
     with pytest.raises(ValueError, match="signed-key|public-key extension"):
         peer_id_from_certificate(malformed_certificate)
+
+
+def test_peer_id_from_certificate_accepts_tls_spec_ed25519_vector():
+    certificate_der = bytes.fromhex(
+        "308201ae30820156a0030201020204499602d2300a06082a8648ce3d040302"
+        "302031123010060355040a13096c69627032702e696f310a30080603550405"
+        "1301313020170d3735303130313133303030305a180f343039363031303131"
+        "33303030305a302031123010060355040a13096c69627032702e696f310a"
+        "300806035504051301313059301306072a8648ce3d020106082a8648ce3d"
+        "030107034200040c901d423c831ca85e27c73c263ba132721bb9d7a84c4f"
+        "0380b2a6756fd601331c8870234dec878504c174144fa4b14b66a65169160"
+        "6d8173e55bd37e381569ea37c307a3078060a2b0601040183a25a0101046a"
+        "3068042408011220a77f1d92fedb59dddaea5a1c4abd1ac2fbde7d7b879ed"
+        "364501809923d7c11b90440d90d2769db992d5e6195dbb08e706b6651e024f"
+        "da6cfb8846694a435519941cac215a8207792e42849cccc6cd8136c6e4bde"
+        "92a58c5e08cfd4206eb5fe0bf909300a06082a8648ce3d04030203460030"
+        "43021f50f6b6c52711a881778718238f650c9fb48943ae6ee6d28427dc607"
+        "1ae55e702203625f116a7a454db9c56986c82a25682f7248ea1cb764d322e"
+        "a983ed36a31b77"
+    )
+    certificate = load_der_x509_certificate(certificate_der)
+
+    assert str(peer_id_from_certificate(certificate)) == (
+        "12D3KooWM6CgA9iBFZmcYAHA6A2qvbAxqfkmrYiRQuz3XEsk4Ksv"
+    )
