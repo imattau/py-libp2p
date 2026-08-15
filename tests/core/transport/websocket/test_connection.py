@@ -1,7 +1,11 @@
+import ssl
+
 import pytest
 from multiaddr import Multiaddr
 import trio
 
+from libp2p.crypto.ed25519 import create_new_key_pair
+from libp2p.security.tls import TLSIdentity
 from libp2p.transport.exceptions import OpenConnectionError
 from libp2p.transport.websocket.connection import WebSocketConnection
 from libp2p.transport.websocket.transport import WebSocket, WebSocketListener
@@ -77,3 +81,39 @@ async def test_wss_requires_explicit_tls_configuration():
 
     with pytest.raises(OpenConnectionError, match="SSL context"):
         await transport.dial(address)
+
+
+@pytest.mark.trio
+async def test_wss_transport_round_trip_with_explicit_contexts(tmp_path):
+    identity = TLSIdentity.create(create_new_key_pair(seed=b"w" * 32))
+    certificate_path = tmp_path / "certificate.pem"
+    private_key_path = tmp_path / "private-key.pem"
+    certificate_path.write_bytes(identity.certificate_pem)
+    private_key_path.write_bytes(identity.private_key_pem)
+
+    server_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    server_context.load_cert_chain(certificate_path, private_key_path)
+    client_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    client_context.check_hostname = False
+    client_context.verify_mode = ssl.CERT_NONE
+    received = trio.Event()
+
+    async def handle_server_connection(connection):
+        assert await connection.read() == b"secure request"
+        await connection.write(b"secure response")
+        received.set()
+        await connection.close()
+
+    listener = WebSocketListener(handle_server_connection, server_context)
+    transport = WebSocket(client_context)
+    async with trio.open_nursery() as nursery:
+        assert await listener.listen(
+            Multiaddr("/ip4/127.0.0.1/tcp/0/wss"), nursery
+        )
+        connection = await transport.dial(listener.get_addrs()[0])
+        await connection.write(b"secure request")
+        assert await connection.read() == b"secure response"
+        await received.wait()
+        await connection.close()
+        nursery.cancel_scope.cancel()
+    await listener.close()
