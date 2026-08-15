@@ -8,6 +8,10 @@ from .driver import (
     QuicDatagramSocket,
     QuicTrioDriver,
 )
+from .events import (
+    QuicConnectionClosed,
+    QuicHandshakeComplete,
+)
 from .stream import QuicStream
 from .stream_manager import QuicStreamManager
 
@@ -26,6 +30,8 @@ class QuicConnectionAdapter:
         self._external_flush_output = flush_output
         self._incoming_send, self._incoming_receive = trio.open_memory_channel(100)
         self._driver: QuicTrioDriver | None = None
+        self._handshake_complete = trio.Event()
+        self._closed = trio.Event()
         self._manager = QuicStreamManager(
             connection,
             muxed_conn,
@@ -52,8 +58,18 @@ class QuicConnectionAdapter:
     async def accept_stream(self) -> QuicStream:
         return await self._incoming_receive.receive()
 
+    async def wait_handshake(self) -> None:
+        await self._handshake_complete.wait()
+
+    async def close(self) -> None:
+        self._closed.set()
+
     def _handle_event(self, event: object) -> None:
         self._manager.handle_event(event)
+        if isinstance(event, QuicHandshakeComplete):
+            self._handshake_complete.set()
+        elif isinstance(event, QuicConnectionClosed):
+            self._closed.set()
 
     def _queue_incoming_stream(self, stream: QuicStream) -> None:
         try:

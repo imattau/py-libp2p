@@ -18,7 +18,8 @@ class QuicDatagramDispatcher:
         self,
         socket: Any,
         on_unknown: Callable[
-            [Any], Awaitable[tuple[QuicConnectionBackend, Callable[[Any], None]] | None]
+            [Any, bytes],
+            Awaitable[tuple[QuicConnectionBackend, Callable[[Any], None]] | None],
         ]
         | None = None,
     ) -> None:
@@ -52,7 +53,7 @@ class QuicDatagramDispatcher:
     ) -> bool:
         route = self._routes.get(addr)
         if route is None and self.on_unknown is not None:
-            route = await self.on_unknown(addr)
+            route = await self.on_unknown(addr, data)
             if route is not None:
                 self._routes[addr] = route
         if route is None:

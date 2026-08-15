@@ -4,6 +4,7 @@ from datetime import (
     timedelta,
     timezone,
 )
+import ssl
 from typing import Any
 
 from cryptography import x509
@@ -69,6 +70,7 @@ def create_quic_connection(
     *,
     is_client: bool,
     key_pair: KeyPair | None = None,
+    original_destination_connection_id: bytes | None = None,
     config: QuicTransportConfig | None = None,
     alpn_protocols: Sequence[str] = (LIBP2P_QUIC_ALPN,),
 ) -> Any:
@@ -88,8 +90,14 @@ def create_quic_connection(
     )
     aioquic_config.idle_timeout = transport_config.idle_timeout
     aioquic_config.max_datagram_size = transport_config.max_datagram_size
+    aioquic_config.verify_mode = ssl.CERT_NONE
     if key_pair is not None:
         certificate, certificate_key = create_libp2p_certificate(key_pair)
         aioquic_config.certificate = certificate
         aioquic_config.private_key = certificate_key
-    return QuicConnection(configuration=aioquic_config)
+    connection_kwargs = {}
+    if original_destination_connection_id is not None:
+        connection_kwargs["original_destination_connection_id"] = (
+            original_destination_connection_id
+        )
+    return QuicConnection(configuration=aioquic_config, **connection_kwargs)

@@ -1,5 +1,7 @@
 from collections.abc import Callable
 
+from aioquic.buffer import Buffer
+from aioquic.quic.packet import pull_quic_header
 from multiaddr import Multiaddr
 import trio
 
@@ -81,11 +83,16 @@ class QuicListener(IListener):
         self._addrs = ()
 
     async def _accept_unknown(
-        self, addr: object
+        self, addr: object, data: bytes
     ) -> tuple[QuicConnectionBackend, Callable[[object], None]] | None:
         if self.key_pair is None or self._dispatcher is None or self._nursery is None:
             return None
-        connection = create_quic_connection(is_client=False, key_pair=self.key_pair)
+        header = pull_quic_header(Buffer(data=data), host_cid_length=8)
+        connection = create_quic_connection(
+            is_client=False,
+            key_pair=self.key_pair,
+            original_destination_connection_id=header.destination_cid,
+        )
         adapter = QuicConnectionAdapter(
             connection,
             object(),
