@@ -134,19 +134,20 @@ P3 — NAT traversal
 
 The highest-impact end-user feature. Several pieces already exist as prototypes.
 
-12. **Finish & verify AutoNAT.**
-    ``libp2p/host/autonat/`` now provides an opt-in host service, address-aware
-    server dial-back, and client probing with a recorded reachability result.
-    Remaining work is policy hardening, broader address-book integration, and
-    validation against go-libp2p.
-    *Status: native implementation in progress; interop and policy validation
-    pending. Effort remaining: medium. Risk: low. Depends on: event bus/notifee
-    alignment (P0); validate through interop harness (P7).*
+12. **Finish AutoNAT native implementation.**
+    ``libp2p/host/autonat/`` provides an opt-in host service, bounded and
+    address-aware server dial-back, concurrent client probing, observed-address
+    persistence, stale-result expiry, and host lifecycle integration.
+    Cross-implementation validation is deferred to P7.
+    *Status: native implementation complete for the current scope; interop pending
+    in P7. Effort remaining: medium. Risk: low.*
 
-13. **Finish & verify circuit-relay-v2.**
-    ``libp2p/relay/circuit_v2/`` is substantial but untested cross-impl. Validate
-    relay/client/hop modes and fix gaps found by interop tests.
-    *Effort: high. Risk: medium.*
+13. **Finish circuit-relay-v2 native implementation.**
+    ``libp2p/relay/circuit_v2/`` provides native relay, client, reservation,
+    voucher, framing, lifecycle, and resource-limit behavior. Cross-implementation
+    validation is deferred to P7.
+    *Status: native implementation complete for the current scope; interop pending
+    in P7. Effort remaining: medium. Risk: medium.*
 
 14. **Hole punching + DCUtR.**
     Implement the hole-punching service and ``/libp2p/dcutr`` on top of AutoNAT and
