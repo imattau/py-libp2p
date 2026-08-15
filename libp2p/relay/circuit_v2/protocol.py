@@ -58,8 +58,8 @@ from .resources import (
 
 logger = logging.getLogger("libp2p.relay.circuit_v2")
 
-PROTOCOL_ID = TProtocol("/libp2p/circuit/relay/2.0.0")
-STOP_PROTOCOL_ID = TProtocol("/libp2p/circuit/relay/2.0.0/stop")
+PROTOCOL_ID = TProtocol("/libp2p/circuit/relay/0.2.0/hop")
+STOP_PROTOCOL_ID = TProtocol("/libp2p/circuit/relay/0.2.0/stop")
 
 # Default limits for relay resources
 DEFAULT_RELAY_LIMITS = RelayLimits(

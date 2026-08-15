@@ -259,6 +259,12 @@ async def close_stream(stream):
                 logger.warning("Error resetting stream: %s", str(e))
 
 
+def test_circuit_v2_protocol_ids_match_spec():
+    """Circuit Relay v2 uses the versioned hop and stop protocol IDs."""
+    assert str(PROTOCOL_ID) == "/libp2p/circuit/relay/0.2.0/hop"
+    assert str(STOP_PROTOCOL_ID) == "/libp2p/circuit/relay/0.2.0/stop"
+
+
 @pytest.mark.trio
 async def test_circuit_v2_protocol_initialization():
     """Test that the Circuit v2 protocol initializes correctly with default settings."""
