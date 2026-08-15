@@ -286,6 +286,7 @@ class CircuitV2Protocol(Service):
         This handler processes relay requests from other peers.
         """
         try:
+            remote_peer_id: ID | None = None
             # Try to get peer ID first
             try:
                 # Cast to extended interface with get_remote_peer_id
@@ -384,7 +385,7 @@ class CircuitV2Protocol(Service):
             # Process based on message type
             if hop_msg.type == HopMessage.RESERVE:
                 logger.debug("Handling RESERVE message from %s", remote_id)
-                await self._handle_reserve(stream, hop_msg)
+                await self._handle_reserve(stream, hop_msg, remote_peer_id)
                 # For RESERVE requests, let the client close the stream
                 return
             elif hop_msg.type == HopMessage.CONNECT:
@@ -498,18 +499,23 @@ class CircuitV2Protocol(Service):
             except Exception:
                 pass
 
-    async def _handle_reserve(self, stream: INetStream, msg: Any) -> None:
+    async def _handle_reserve(
+        self,
+        stream: INetStream,
+        msg: Any,
+        requester_peer_id: ID | None = None,
+    ) -> None:
         """Handle a reservation request."""
         peer_id = None
         try:
-            if not msg.HasField("peer") or not msg.peer.id:
+            if requester_peer_id is None:
                 await self._send_status(
                     stream,
                     StatusCode.MALFORMED_MESSAGE,
-                    "Missing reservation peer ID",
+                    "Missing authenticated reservation peer ID",
                 )
                 return
-            peer_id = ID(msg.peer.id)
+            peer_id = requester_peer_id
             logger.debug("Handling reservation request from peer %s", peer_id)
 
             # Check if we can accept more reservations

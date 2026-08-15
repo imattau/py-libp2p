@@ -299,10 +299,7 @@ class CircuitV2Transport(ITransport):
         """
         try:
             # Send reservation request
-            reserve_msg = HopMessage(
-                type=HopMessage.RESERVE,
-                peer=Peer(id=self.host.get_id().to_bytes()),
-            )
+            reserve_msg = HopMessage(type=HopMessage.RESERVE)
             await stream.write(reserve_msg.SerializeToString())
 
             # Read response

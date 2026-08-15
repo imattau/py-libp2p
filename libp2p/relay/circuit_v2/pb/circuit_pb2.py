@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n(libp2p/relay/circuit_v2/pb/circuit.proto\x12\rcircuit.pb.v2\"\x88\x02\n\nHopMessage\x12,\n\x04type\x18\x01 \x01(\x0e\x32\x1e.circuit.pb.v2.HopMessage.Type\x12!\n\x04peer\x18\x02 \x01(\x0b\x32\x13.circuit.pb.v2.Peer\x12/\n\x0breservation\x18\x03 \x01(\x0b\x32\x1a.circuit.pb.v2.Reservation\x12#\n\x05limit\x18\x04 \x01(\x0b\x32\x14.circuit.pb.v2.Limit\x12%\n\x06status\x18\x05 \x01(\x0b\x32\x15.circuit.pb.v2.Status\",\n\x04Type\x12\x0b\n\x07RESERVE\x10\x00\x12\x0b\n\x07\x43ONNECT\x10\x01\x12\n\n\x06STATUS\x10\x02\"\xcc\x01\n\x0bStopMessage\x12-\n\x04type\x18\x01 \x01(\x0e\x32\x1f.circuit.pb.v2.StopMessage.Type\x12!\n\x04peer\x18\x02 \x01(\x0b\x32\x13.circuit.pb.v2.Peer\x12#\n\x05limit\x18\x03 \x01(\x0b\x32\x14.circuit.pb.v2.Limit\x12%\n\x06status\x18\x04 \x01(\x0b\x32\x15.circuit.pb.v2.Status\"\x1f\n\x04Type\x12\x0b\n\x07\x43ONNECT\x10\x00\x12\n\n\x06STATUS\x10\x01\"!\n\x04Peer\x12\n\n\x02id\x18\x01 \x01(\x0c\x12\r\n\x05\x61\x64\x64rs\x18\x02 \x03(\x0c\"P\n\x0bReservation\x12\x0e\n\x06\x65xpire\x18\x01 \x01(\x04\x12\r\n\x05\x61\x64\x64rs\x18\x02 \x03(\x0c\x12\x0f\n\x07voucher\x18\x03 \x01(\x0c\x12\x11\n\tsignature\x18\x04 \x01(\x0c\"\'\n\x05Limit\x12\x10\n\x08\x64uration\x18\x01 \x01(\x03\x12\x0c\n\x04\x64\x61ta\x18\x02 \x01(\x03\"\x8e\x02\n\x06Status\x12(\n\x04\x63ode\x18\x01 \x01(\x0e\x32\x1a.circuit.pb.v2.Status.Code\x12\x0f\n\x07message\x18\x02 \x01(\t\"\xc8\x01\n\x04\x43ode\x12\n\n\x06UNUSED\x10\x00\x12\x06\n\x02OK\x10\x64\x12\x18\n\x13RESERVATION_REFUSED\x10\xc8\x01\x12\x1c\n\x17RESOURCE_LIMIT_EXCEEDED\x10\xc9\x01\x12\x16\n\x11PERMISSION_DENIED\x10\xca\x01\x12\x16\n\x11\x43ONNECTION_FAILED\x10\xcb\x01\x12\x13\n\x0eNO_RESERVATION\x10\xcc\x01\x12\x16\n\x11MALFORMED_MESSAGE\x10\x90\x03\x12\x17\n\x12UNEXPECTED_MESSAGE\x10\x91\x03\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n(libp2p/relay/circuit_v2/pb/circuit.proto\x12\rcircuit.pb.v2\"\xd8\x02\n\nHopMessage\x12\x31\n\x04type\x18\x01 \x01(\x0e\x32\x1e.circuit.pb.v2.HopMessage.TypeH\x00\x88\x01\x01\x12&\n\x04peer\x18\x02 \x01(\x0b\x32\x13.circuit.pb.v2.PeerH\x01\x88\x01\x01\x12\x34\n\x0breservation\x18\x03 \x01(\x0b\x32\x1a.circuit.pb.v2.ReservationH\x02\x88\x01\x01\x12(\n\x05limit\x18\x04 \x01(\x0b\x32\x14.circuit.pb.v2.LimitH\x03\x88\x01\x01\x12*\n\x06status\x18\x05 \x01(\x0b\x32\x15.circuit.pb.v2.StatusH\x04\x88\x01\x01\",\n\x04Type\x12\x0b\n\x07RESERVE\x10\x00\x12\x0b\n\x07\x43ONNECT\x10\x01\x12\n\n\x06STATUS\x10\x02\x42\x07\n\x05_typeB\x07\n\x05_peerB\x0e\n\x0c_reservationB\x08\n\x06_limitB\t\n\x07_status\"\x87\x02\n\x0bStopMessage\x12\x32\n\x04type\x18\x01 \x01(\x0e\x32\x1f.circuit.pb.v2.StopMessage.TypeH\x00\x88\x01\x01\x12&\n\x04peer\x18\x02 \x01(\x0b\x32\x13.circuit.pb.v2.PeerH\x01\x88\x01\x01\x12(\n\x05limit\x18\x03 \x01(\x0b\x32\x14.circuit.pb.v2.LimitH\x02\x88\x01\x01\x12*\n\x06status\x18\x04 \x01(\x0b\x32\x15.circuit.pb.v2.StatusH\x03\x88\x01\x01\"\x1f\n\x04Type\x12\x0b\n\x07\x43ONNECT\x10\x00\x12\n\n\x06STATUS\x10\x01\x42\x07\n\x05_typeB\x07\n\x05_peerB\x08\n\x06_limitB\t\n\x07_status\"-\n\x04Peer\x12\x0f\n\x02id\x18\x01 \x01(\x0cH\x00\x88\x01\x01\x12\r\n\x05\x61\x64\x64rs\x18\x02 \x03(\x0c\x42\x05\n\x03_id\"\x84\x01\n\x0bReservation\x12\x13\n\x06\x65xpire\x18\x01 \x01(\x04H\x00\x88\x01\x01\x12\r\n\x05\x61\x64\x64rs\x18\x02 \x03(\x0c\x12\x14\n\x07voucher\x18\x03 \x01(\x0cH\x01\x88\x01\x01\x12\x16\n\tsignature\x18\x04 \x01(\x0cH\x02\x88\x01\x01\x42\t\n\x07_expireB\n\n\x08_voucherB\x0c\n\n_signature\"G\n\x05Limit\x12\x15\n\x08\x64uration\x18\x01 \x01(\x03H\x00\x88\x01\x01\x12\x11\n\x04\x64\x61ta\x18\x02 \x01(\x03H\x01\x88\x01\x01\x42\x0b\n\t_durationB\x07\n\x05_data\"\xad\x02\n\x06Status\x12-\n\x04\x63ode\x18\x01 \x01(\x0e\x32\x1a.circuit.pb.v2.Status.CodeH\x00\x88\x01\x01\x12\x14\n\x07message\x18\x02 \x01(\tH\x01\x88\x01\x01\"\xc8\x01\n\x04\x43ode\x12\n\n\x06UNUSED\x10\x00\x12\x06\n\x02OK\x10\x64\x12\x18\n\x13RESERVATION_REFUSED\x10\xc8\x01\x12\x1c\n\x17RESOURCE_LIMIT_EXCEEDED\x10\xc9\x01\x12\x16\n\x11PERMISSION_DENIED\x10\xca\x01\x12\x16\n\x11\x43ONNECTION_FAILED\x10\xcb\x01\x12\x13\n\x0eNO_RESERVATION\x10\xcc\x01\x12\x16\n\x11MALFORMED_MESSAGE\x10\x90\x03\x12\x17\n\x12UNEXPECTED_MESSAGE\x10\x91\x03\x42\x07\n\x05_codeB\n\n\x08_messageb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -22,21 +22,21 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'libp2p.relay.circuit_v2.pb.
 if _descriptor._USE_C_DESCRIPTORS == False:
   DESCRIPTOR._options = None
   _globals['_HOPMESSAGE']._serialized_start=60
-  _globals['_HOPMESSAGE']._serialized_end=324
-  _globals['_HOPMESSAGE_TYPE']._serialized_start=280
-  _globals['_HOPMESSAGE_TYPE']._serialized_end=324
-  _globals['_STOPMESSAGE']._serialized_start=327
-  _globals['_STOPMESSAGE']._serialized_end=531
-  _globals['_STOPMESSAGE_TYPE']._serialized_start=500
-  _globals['_STOPMESSAGE_TYPE']._serialized_end=531
-  _globals['_PEER']._serialized_start=533
-  _globals['_PEER']._serialized_end=566
-  _globals['_RESERVATION']._serialized_start=568
-  _globals['_RESERVATION']._serialized_end=648
-  _globals['_LIMIT']._serialized_start=650
-  _globals['_LIMIT']._serialized_end=689
-  _globals['_STATUS']._serialized_start=692
-  _globals['_STATUS']._serialized_end=962
-  _globals['_STATUS_CODE']._serialized_start=762
-  _globals['_STATUS_CODE']._serialized_end=962
+  _globals['_HOPMESSAGE']._serialized_end=404
+  _globals['_HOPMESSAGE_TYPE']._serialized_start=305
+  _globals['_HOPMESSAGE_TYPE']._serialized_end=349
+  _globals['_STOPMESSAGE']._serialized_start=407
+  _globals['_STOPMESSAGE']._serialized_end=670
+  _globals['_STOPMESSAGE_TYPE']._serialized_start=600
+  _globals['_STOPMESSAGE_TYPE']._serialized_end=631
+  _globals['_PEER']._serialized_start=672
+  _globals['_PEER']._serialized_end=717
+  _globals['_RESERVATION']._serialized_start=720
+  _globals['_RESERVATION']._serialized_end=852
+  _globals['_LIMIT']._serialized_start=854
+  _globals['_LIMIT']._serialized_end=925
+  _globals['_STATUS']._serialized_start=928
+  _globals['_STATUS']._serialized_end=1229
+  _globals['_STATUS_CODE']._serialized_start=1008
+  _globals['_STATUS_CODE']._serialized_end=1208
 # @@protoc_insertion_point(module_scope)
