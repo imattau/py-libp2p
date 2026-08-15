@@ -56,3 +56,27 @@ async def test_tls_transport_authenticates_and_encrypts_memory_stream():
     assert await inbound.read() == b"encrypted"
     await outbound.close()
     await inbound.close()
+
+
+@pytest.mark.trio
+async def test_tls_transport_rejects_unexpected_peer_id():
+    stream_0, stream_1 = memory_stream_pair()
+    key_pair_0 = create_new_key_pair(seed=b"2" * 32)
+    key_pair_1 = create_new_key_pair(seed=b"3" * 32)
+    key_pair_unexpected = create_new_key_pair(seed=b"4" * 32)
+    transport_0 = TLSTransport(key_pair_0)
+    transport_1 = TLSTransport(key_pair_1)
+
+    async def secure_outbound():
+        with pytest.raises(ValueError, match="does not match"):
+            await transport_0.secure_outbound(
+                RawMemoryConnection(stream_0),
+                TLSTransport(key_pair_unexpected).identity.peer_id,
+            )
+
+    async def secure_inbound():
+        await transport_1.secure_inbound(RawMemoryConnection(stream_1))
+
+    async with trio.open_nursery() as nursery:
+        nursery.start_soon(secure_outbound)
+        nursery.start_soon(secure_inbound)
