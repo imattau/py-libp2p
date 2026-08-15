@@ -15,6 +15,7 @@ from libp2p.host.basic_host import (
 from libp2p.host.defaults import (
     get_default_protocols,
 )
+from libp2p.host.holepunch import HOLEPUNCH_PROTOCOL_ID, HolePunchService
 
 
 def test_default_protocols():
@@ -34,3 +35,10 @@ def test_new_host_can_enable_autonat():
 
     assert isinstance(host.autonat, AutoNATService)
     assert AUTONAT_PROTOCOL_ID in host.get_mux().handlers
+
+
+def test_new_host_can_enable_hole_punching():
+    host = new_host(enable_hole_punching=True)
+
+    assert isinstance(host.holepunch, HolePunchService)
+    assert HOLEPUNCH_PROTOCOL_ID in host.get_mux().handlers
