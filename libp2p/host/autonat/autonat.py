@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 import logging
 
 from google.protobuf.message import (
@@ -288,6 +288,39 @@ class AutoNATService:
             return success
         finally:
             await stream.close()
+
+    async def probe_many(
+        self,
+        probes: Mapping[ID, Sequence[Multiaddr]],
+    ) -> dict[ID, bool]:
+        """
+        Probe multiple independent AutoNAT servers concurrently.
+
+        Failed individual probes are recorded as failures without preventing
+        other servers from contributing to the reachability result.
+        """
+        results: dict[ID, bool] = {}
+
+        async def run_probe(
+            server_peer_id: ID, addresses: Sequence[Multiaddr]
+        ) -> None:
+            try:
+                results[server_peer_id] = await self.probe(server_peer_id, addresses)
+            except Exception:
+                logger.debug(
+                    "AutoNAT probe failed for server %s",
+                    server_peer_id,
+                    exc_info=True,
+                )
+                self.dial_results[server_peer_id] = False
+                self.update_status()
+                results[server_peer_id] = False
+
+        async with trio.open_nursery() as nursery:
+            for server_peer_id, addresses in probes.items():
+                nursery.start_soon(run_probe, server_peer_id, addresses)
+
+        return results
 
     def update_status(self) -> None:
         """

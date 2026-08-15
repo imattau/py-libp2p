@@ -166,6 +166,43 @@ async def test_probe_sends_addresses_and_records_result():
 
 
 @pytest.mark.trio
+async def test_probe_many_records_independent_results():
+    async with HostFactory.create_batch_and_listen(3) as hosts:
+        client, server_one, server_two = hosts
+        service = AutoNATService(client)
+        mock_stream = AsyncMock(spec=NetStream)
+        response = Message(type=Message.DIAL_RESPONSE)
+        response.dialResponse.status = Message.OK
+        encoded_response = encode_varint_prefixed(response.SerializeToString())
+        mock_stream.read.side_effect = [
+            encoded_response[:1],
+            encoded_response[1:],
+            encoded_response[:1],
+            encoded_response[1:],
+        ]
+
+        with patch.object(
+            client,
+            "new_stream",
+            new_callable=AsyncMock,
+            return_value=mock_stream,
+        ):
+            results = await service.probe_many(
+                {
+                    server_one.get_id(): [Multiaddr("/ip4/127.0.0.1/tcp/4001")],
+                    server_two.get_id(): [Multiaddr("/ip4/127.0.0.1/tcp/4002")],
+                }
+            )
+
+        assert results == {
+            server_one.get_id(): True,
+            server_two.get_id(): True,
+        }
+        assert service.dial_results[server_one.get_id()] is True
+        assert service.dial_results[server_two.get_id()] is True
+
+
+@pytest.mark.trio
 async def test_probe_round_trip_between_hosts():
     async with HostFactory.create_batch_and_listen(2) as hosts:
         client, server = hosts
