@@ -117,8 +117,14 @@ dependency.
    Effort remaining: medium. Risk: medium.*
 
 11. **WebSocket transport.**
-   Implement ``libp2p-websocket`` (ws/wss). Broadens reach to browser-hosted peers.
-   *Effort: medium. Risk: low.*
+   Implement ``libp2p-websocket`` (ws/wss) with Trio-native ``trio-websocket``
+   (``wsproto`` sans-I/O underneath), preserving the project-wide Trio decision.
+   Adapt binary WebSocket messages to the existing byte-stream connection contract,
+   then retain the normal libp2p security and muxer upgrade path above the raw
+   transport. Initial acceptance covers ``/ws`` and ``/wss`` multiaddrs, listener
+   and dialer lifecycle, binary framing, and close/EOF behavior; browser and Go
+   interoperability remain P7 validation work.
+   *Status: next P2 implementation slice. Effort: medium. Risk: medium.*
 
 P3 — NAT traversal
 ~~~~~~~~~~~~~~~~~~
