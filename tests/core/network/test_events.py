@@ -89,6 +89,30 @@ async def test_event_bus_preserves_order_and_applies_backpressure():
 
 
 @pytest.mark.trio
+async def test_event_bus_preserves_cross_event_lifecycle_order():
+    event_bus = EventBus()
+    events = await event_bus.subscribe(max_buffer_size=8)
+    conn = FakeConn(FakeMuxedConn(ID(b"peer")))
+    stream = object()
+    multiaddr = Multiaddr("/ip4/127.0.0.1/tcp/4001")
+    expected = (
+        EventListen(multiaddr),
+        EventConnected(conn),
+        EventOpenedStream(stream),
+        EventClosedStream(stream),
+        EventDisconnected(conn),
+        EventListenClose(multiaddr),
+    )
+
+    for event in expected:
+        await event_bus.publish(event)
+
+    for expected_event in expected:
+        actual_event = await events.receive()
+        assert actual_event == expected_event
+
+
+@pytest.mark.trio
 async def test_swarm_event_bus_emits_connection_and_stream_events(security_protocol):
     async with SwarmFactory.create_batch_and_listen(
         2, security_protocol=security_protocol
