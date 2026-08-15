@@ -1,6 +1,5 @@
 import pytest
 from multiaddr import Multiaddr
-import trio
 
 from libp2p import new_swarm
 from libp2p.crypto.ed25519 import create_new_key_pair
