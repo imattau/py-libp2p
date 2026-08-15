@@ -51,10 +51,22 @@ as the first step.
    * Decide whether emergency memory-pressure trimming belongs in this layer.
    *Status: in progress. Effort remaining: low. Risk: low.*
 
-3. **Resource manager.**
-   Port the resource-manager (per-protocol, per-peer, per-scope limits). A minimal
-   ``RelayResourceManager`` already exists in ``relay/circuit_v2/resources.py`` to build on.
-   *Effort: high. Risk: medium. Depends on: connmgr.*
+3. **Resource manager — foundation port started.**
+   ``libp2p.host.resource_manager`` now provides the initial Go-style scope model:
+   system and transient scopes, peer/protocol/service scopes, connection and stream
+   management scopes, memory reservations with priority thresholds, scope spans,
+   scoped statistics, rollback on failed reservations, and a null manager. ``new_host``
+   and ``new_swarm`` accept an optional resource manager and expose it on the network.
+
+   Remaining parity work:
+
+   * Enforce connection and stream reservations inside the transport/swarm/muxer paths.
+   * Add allowlist, per-peer/per-protocol/per-service limit configuration loaders, and
+     autoscaled defaults.
+   * Integrate relay-v2 resource accounting with the shared manager instead of only
+     using relay-local reservation counters.
+   * Add metrics/trace reporting once the observability layer exists.
+   *Status: in progress. Effort remaining: high. Risk: medium. Depends on: connmgr.*
 
 4. **Event bus and notifee alignment.**
    Promote connection/stream lifecycle notifications to a Go-style event surface so

@@ -9,6 +9,7 @@ Subpackages
 
    libp2p.host.autonat
    libp2p.host.connmgr
+   libp2p.host.resource_manager
 
 Submodules
 ----------

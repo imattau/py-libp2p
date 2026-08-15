@@ -39,6 +39,10 @@ from libp2p.discovery.mdns.mdns import (
 from libp2p.host.basic_host import (
     BasicHost,
 )
+from libp2p.host.resource_manager import (
+    NullResourceManager,
+    ResourceManager,
+)
 from libp2p.host.routed_host import (
     RoutedHost,
 )
@@ -162,6 +166,7 @@ def new_swarm(
     muxer_opt: TMuxerOptions | None = None,
     sec_opt: TSecurityOptions | None = None,
     peerstore_opt: IPeerStore | None = None,
+    resource_manager: ResourceManager | NullResourceManager | None = None,
     muxer_preference: Literal["YAMUX", "MPLEX"] | None = None,
     listen_addrs: Sequence[multiaddr.Multiaddr] | None = None,
 ) -> INetworkService:
@@ -172,6 +177,7 @@ def new_swarm(
     :param muxer_opt: optional choice of stream muxer
     :param sec_opt: optional choice of security upgrade
     :param peerstore_opt: optional peerstore
+    :param resource_manager: optional network resource manager
     :param muxer_preference: optional explicit muxer preference
     :param listen_addrs: optional list of multiaddrs to listen on
     :return: return a default swarm instance
@@ -240,7 +246,7 @@ def new_swarm(
     # Store our key pair in peerstore
     peerstore.add_key_pair(id_opt, key_pair)
 
-    return Swarm(id_opt, peerstore, upgrader, transport)
+    return Swarm(id_opt, peerstore, upgrader, transport, resource_manager)
 
 
 def new_host(
@@ -249,6 +255,7 @@ def new_host(
     sec_opt: TSecurityOptions | None = None,
     peerstore_opt: IPeerStore | None = None,
     disc_opt: IPeerRouting | None = None,
+    resource_manager: ResourceManager | NullResourceManager | None = None,
     muxer_preference: Literal["YAMUX", "MPLEX"] | None = None,
     listen_addrs: Sequence[multiaddr.Multiaddr] | None = None,
     enable_mDNS: bool = False,
@@ -264,6 +271,7 @@ def new_host(
     :param sec_opt: optional choice of security upgrade
     :param peerstore_opt: optional peerstore
     :param disc_opt: optional discovery
+    :param resource_manager: optional network resource manager
     :param muxer_preference: optional explicit muxer preference
     :param listen_addrs: optional list of multiaddrs to listen on
     :param enable_mDNS: whether to enable mDNS discovery
@@ -276,6 +284,7 @@ def new_host(
         muxer_opt=muxer_opt,
         sec_opt=sec_opt,
         peerstore_opt=peerstore_opt,
+        resource_manager=resource_manager,
         muxer_preference=muxer_preference,
         listen_addrs=listen_addrs,
     )

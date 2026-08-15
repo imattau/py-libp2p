@@ -18,6 +18,9 @@ from libp2p.abc import (
 from libp2p.custom_types import (
     StreamHandlerFn,
 )
+from libp2p.host.resource_manager import (
+    NullResourceManager,
+)
 from libp2p.io.abc import (
     ReadWriteCloser,
 )
@@ -67,6 +70,7 @@ class Swarm(Service, INetworkService):
     peerstore: IPeerStore
     upgrader: TransportUpgrader
     transport: ITransport
+    resource_manager: object
     # TODO: Connection and `peer_id` are 1-1 mapping in our implementation,
     #   whereas in Go one `peer_id` may point to multiple connections.
     connections: dict[ID, INetConn]
@@ -83,11 +87,13 @@ class Swarm(Service, INetworkService):
         peerstore: IPeerStore,
         upgrader: TransportUpgrader,
         transport: ITransport,
+        resource_manager: object | None = None,
     ):
         self.self_id = peer_id
         self.peerstore = peerstore
         self.upgrader = upgrader
         self.transport = transport
+        self.resource_manager = resource_manager or NullResourceManager()
         self.connections = dict()
         self.listeners = dict()
 
