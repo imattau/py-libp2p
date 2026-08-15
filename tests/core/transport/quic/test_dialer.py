@@ -45,3 +45,31 @@ async def test_dialer_completes_localhost_quic_handshake():
         nursery.cancel_scope.cancel()
 
     await listener.close()
+
+
+@pytest.mark.trio
+async def test_dialer_rejects_mismatched_peer_id():
+    server_key_pair = create_new_key_pair(seed=b"m" * 32)
+    client_key_pair = create_new_key_pair(seed=b"n" * 32)
+
+    async def handle_server_connection(connection):
+        await connection.wait_handshake()
+        await trio.sleep_forever()
+
+    listener = QuicListener(handle_server_connection, server_key_pair)
+    async with trio.open_nursery() as nursery:
+        assert await listener.listen(
+            Multiaddr("/ip4/127.0.0.1/udp/0/quic-v1"), nursery
+        )
+        port = int(listener.get_addrs()[0].value_for_protocol("udp"))
+        with pytest.raises(ValueError, match="does not match"):
+            await QuicDialer().dial(
+                "127.0.0.1",
+                port,
+                client_key_pair,
+                nursery,
+                expected_peer_id=ID.from_pubkey(client_key_pair.public_key),
+            )
+        nursery.cancel_scope.cancel()
+
+    await listener.close()
