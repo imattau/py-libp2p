@@ -8,6 +8,7 @@ allowing peers to establish connections through relay nodes.
 from collections.abc import Awaitable, Callable
 import logging
 import time
+from typing import Any
 
 import multiaddr
 import trio
@@ -515,9 +516,12 @@ class CircuitV2Listener(Service, IListener):
             await stream.close()
             raise ConnectionError(f"Failed to handle incoming connection: {str(e)}")
 
-    async def run(self) -> None:
-        """Run the listener service."""
-        # Implementation would go here
+    async def run(
+        self, *, task_status: Any = trio.TASK_STATUS_IGNORED
+    ) -> None:
+        """Keep the listener service alive while the protocol handles STOP streams."""
+        task_status.started()
+        await self.manager.wait_finished()
 
     async def listen(self, maddr: multiaddr.Multiaddr, nursery: trio.Nursery) -> bool:
         """
