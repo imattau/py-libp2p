@@ -38,6 +38,7 @@ AUTONAT_MIN_RESPONSES = 4
 MAX_AUTONAT_MESSAGE_SIZE = 4096
 MAX_CONCURRENT_DIALS = 4
 AUTONAT_RESULT_TTL = 3600
+AUTONAT_PROBE_TIMEOUT = 15
 
 logger = logging.getLogger("libp2p.host.autonat")
 
@@ -281,28 +282,33 @@ class AutoNATService:
 
         stream = await self.host.new_stream(server_peer_id, [AUTONAT_PROTOCOL_ID])
         try:
-            await stream.write(encode_varint_prefixed(request.SerializeToString()))
-            response = Message()
-            try:
-                response.ParseFromString(await read_varint_prefixed_bytes(stream))
-            except DecodeError:
-                self._record_probe_result(server_peer_id, False)
-                return False
-            success = response.type == Message.DIAL_RESPONSE and (
-                response.dialResponse.status == Message.OK
-            )
-            if success and response.dialResponse.addr:
+            with trio.fail_after(AUTONAT_PROBE_TIMEOUT):
+                await stream.write(encode_varint_prefixed(request.SerializeToString()))
+                response = Message()
                 try:
-                    observed_addr = Multiaddr(response.dialResponse.addr)
-                except (TypeError, ValueError):
-                    logger.debug("Ignoring invalid AutoNAT observed address")
-                else:
-                    self.observed_addrs.add(observed_addr)
-                    self.peerstore.add_addrs(
-                        self.host.get_id(), [observed_addr], 60_000
-                    )
-            self._record_probe_result(server_peer_id, success)
-            return success
+                    response.ParseFromString(await read_varint_prefixed_bytes(stream))
+                except DecodeError:
+                    self._record_probe_result(server_peer_id, False)
+                    return False
+                success = response.type == Message.DIAL_RESPONSE and (
+                    response.dialResponse.status == Message.OK
+                )
+                if success and response.dialResponse.addr:
+                    try:
+                        observed_addr = Multiaddr(response.dialResponse.addr)
+                    except (TypeError, ValueError):
+                        logger.debug("Ignoring invalid AutoNAT observed address")
+                    else:
+                        self.observed_addrs.add(observed_addr)
+                        self.peerstore.add_addrs(
+                            self.host.get_id(), [observed_addr], 60_000
+                        )
+                self._record_probe_result(server_peer_id, success)
+                return success
+        except trio.TooSlowError:
+            logger.debug("AutoNAT probe timed out for server %s", server_peer_id)
+            self._record_probe_result(server_peer_id, False)
+            return False
         finally:
             await stream.close()
 
