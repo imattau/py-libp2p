@@ -3,6 +3,7 @@ from typing import (
     TYPE_CHECKING,
 )
 
+from multiaddr import Multiaddr
 import trio
 
 from libp2p.abc import (
@@ -167,6 +168,9 @@ class SwarmConn(INetConn):
 
     def get_streams(self) -> tuple[NetStream, ...]:
         return tuple(self.streams)
+
+    def get_remote_multiaddr(self) -> Multiaddr | None:
+        return getattr(self.muxed_conn, "get_remote_multiaddr", lambda: None)()
 
     def remove_stream(self, stream: NetStream) -> None:
         if stream not in self.streams:

@@ -147,3 +147,17 @@ async def test_handler_dials_remote_candidates_after_sync() -> None:
 def test_message_size_is_bounded() -> None:
     with pytest.raises(HolePunchProtocolError):
         HolePunchService._message(HolePunch.CONNECT, [ADDR] * 1000)
+
+
+def test_relayed_connection_detection() -> None:
+    class Connection:
+        def __init__(self, address) -> None:
+            self.address = address
+
+        def get_remote_multiaddr(self):
+            return self.address
+
+    assert HolePunchService._is_relayed_connection(
+        Connection(Multiaddr("/p2p-circuit"))
+    )
+    assert not HolePunchService._is_relayed_connection(Connection(ADDR))

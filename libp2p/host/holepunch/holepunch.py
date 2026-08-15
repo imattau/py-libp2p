@@ -3,11 +3,13 @@ import logging
 
 from google.protobuf.message import DecodeError
 from multiaddr import Multiaddr
+import trio
 
 from libp2p.custom_types import TProtocol
 from libp2p.host.basic_host import BasicHost
 from libp2p.host.holepunch.pb.holepunch_pb2 import HolePunch
 from libp2p.io.utils import read_exactly
+from libp2p.network.events import EventConnected
 from libp2p.peer.id import ID
 from libp2p.utils.varint import decode_uvarint_from_stream, encode_varint_prefixed
 
@@ -26,13 +28,46 @@ class HolePunchService:
     """
     DCUtR coordination and candidate-address exchange.
 
-    Direct dialing is deliberately kept outside this service until the swarm
-    supports replacing a relayed connection atomically.
+    Direct dialing is delegated to the swarm, which owns connection replacement.
     """
 
     def __init__(self, host: BasicHost) -> None:
         self.host = host
+        self._upgrading: set[ID] = set()
         host.set_stream_handler(HOLEPUNCH_PROTOCOL_ID, self.handle_stream)
+
+    @staticmethod
+    def _is_relayed_connection(connection) -> bool:
+        address = getattr(connection, "get_remote_multiaddr", lambda: None)()
+        return address is not None and any(
+            protocol.name == "p2p-circuit" for protocol in address.protocols()
+        )
+
+    async def run(self) -> None:
+        """Upgrade newly established relay connections in the background."""
+        subscription = await self.host.get_network().get_event_bus().subscribe(
+            EventConnected, max_buffer_size=64
+        )
+        try:
+            async with trio.open_nursery() as nursery:
+                async for event in subscription:
+                    peer_id = event.conn.muxed_conn.peer_id
+                    if not self._is_relayed_connection(event.conn):
+                        continue
+                    if peer_id in self._upgrading:
+                        continue
+                    self._upgrading.add(peer_id)
+                    nursery.start_soon(self._upgrade, peer_id)
+        finally:
+            await subscription.unsubscribe()
+
+    async def _upgrade(self, peer_id: ID) -> None:
+        try:
+            await self.connect(peer_id)
+        except Exception as error:
+            logger.debug("DCUtR upgrade failed for peer %s", peer_id, exc_info=error)
+        finally:
+            self._upgrading.discard(peer_id)
 
     def _candidate_addrs(self) -> tuple[Multiaddr, ...]:
         addresses: set[Multiaddr] = set(self.host.get_addrs())
