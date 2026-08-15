@@ -33,6 +33,12 @@ class QuicDatagramDispatcher:
     def unregister(self, addr: Any) -> None:
         self._routes.pop(addr, None)
 
+    async def run(self, max_datagram_size: int = 1200) -> None:
+        """Own the shared socket receive loop until cancelled or closed."""
+        while True:
+            data, addr = await self.socket.recvfrom(max_datagram_size)
+            await self.handle_datagram(data, addr)
+
     async def handle_datagram(
         self, data: bytes, addr: Any, now: float | None = None
     ) -> bool:
