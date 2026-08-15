@@ -410,7 +410,7 @@ class RelayDiscovery(Service):
                     response.ParseFromString(response_bytes)
 
                     # Check if reservation was successful
-                    if response.type == HopMessage.RESERVE and response.HasField(
+                    if response.type == HopMessage.STATUS and response.HasField(
                         "status"
                     ):
                         # Access status code directly from protobuf object

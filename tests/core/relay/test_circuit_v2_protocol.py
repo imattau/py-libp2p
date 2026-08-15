@@ -337,7 +337,7 @@ async def test_circuit_v2_reservation_basic():
                 if request.type == proto.HopMessage.RESERVE:
                     # Create a valid response
                     response = proto.HopMessage(
-                        type=proto.HopMessage.RESERVE,
+                        type=proto.HopMessage.STATUS,
                         status=proto.Status(
                             code=proto.Status.OK,
                             message="Reservation accepted",
@@ -416,7 +416,7 @@ async def test_circuit_v2_reservation_basic():
                 response.ParseFromString(response_bytes)
 
                 # Verify response
-                assert response.type == proto.HopMessage.RESERVE, (
+                assert response.type == proto.HopMessage.STATUS, (
                     f"Wrong response type: {response.type}"
                 )
                 assert response.HasField("status"), "No status field"
@@ -486,7 +486,7 @@ async def test_circuit_v2_reservation_limit():
 
                         # Create a success response
                         response = proto.HopMessage(
-                            type=proto.HopMessage.RESERVE,
+                            type=proto.HopMessage.STATUS,
                             status=proto.Status(
                                 code=proto.Status.OK,
                                 message="Reservation accepted",
@@ -507,7 +507,7 @@ async def test_circuit_v2_reservation_limit():
                     else:
                         # Reject the reservation due to limits
                         response = proto.HopMessage(
-                            type=proto.HopMessage.RESERVE,
+                            type=proto.HopMessage.STATUS,
                             status=proto.Status(
                                 code=proto.Status.RESOURCE_LIMIT_EXCEEDED,
                                 message="Reservation limit exceeded",
@@ -587,7 +587,7 @@ async def test_circuit_v2_reservation_limit():
                 response1.ParseFromString(response_bytes)
 
                 # Verify response
-                assert response1.type == proto.HopMessage.RESERVE, (
+                assert response1.type == proto.HopMessage.STATUS, (
                     f"Wrong response type: {response1.type}"
                 )
                 assert response1.HasField("status"), "No status field"
@@ -644,7 +644,7 @@ async def test_circuit_v2_reservation_limit():
                 response2.ParseFromString(response_bytes)
 
                 # Verify response
-                assert response2.type == proto.HopMessage.RESERVE, (
+                assert response2.type == proto.HopMessage.STATUS, (
                     f"Wrong response type: {response2.type}"
                 )
                 assert response2.HasField("status"), "No status field"
