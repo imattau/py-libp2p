@@ -5,6 +5,7 @@ from multiaddr import Multiaddr
 
 from libp2p.host.holepunch.holepunch import (
     HOLEPUNCH_PROTOCOL_ID,
+    HolePunchActiveError,
     HolePunchProtocolError,
     HolePunchService,
 )
@@ -142,6 +143,15 @@ async def test_handler_dials_remote_candidates_after_sync() -> None:
 
     assert network.calls == [(b"peer", (ADDR,))]
     assert stream.closed
+
+
+@pytest.mark.trio
+async def test_connect_rejects_concurrent_upgrade() -> None:
+    service = HolePunchService(FakeHost(MemoryStream()))
+    service._upgrading.add(b"peer")
+
+    with pytest.raises(HolePunchActiveError):
+        await service.connect(b"peer")
 
 
 def test_message_size_is_bounded() -> None:

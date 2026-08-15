@@ -25,6 +25,10 @@ class HolePunchProtocolError(ValueError):
     pass
 
 
+class HolePunchActiveError(HolePunchProtocolError):
+    pass
+
+
 class HolePunchService:
     """
     DCUtR coordination and candidate-address exchange.
@@ -57,7 +61,6 @@ class HolePunchService:
                         continue
                     if peer_id in self._upgrading:
                         continue
-                    self._upgrading.add(peer_id)
                     nursery.start_soon(self._upgrade, peer_id)
         finally:
             await subscription.unsubscribe()
@@ -67,8 +70,6 @@ class HolePunchService:
             await self.connect(peer_id)
         except Exception as error:
             logger.debug("DCUtR upgrade failed for peer %s", peer_id, exc_info=error)
-        finally:
-            self._upgrading.discard(peer_id)
 
     def _candidate_addrs(self) -> tuple[Multiaddr, ...]:
         addresses: set[Multiaddr] = set(self.host.get_addrs())
@@ -145,6 +146,17 @@ class HolePunchService:
             await stream.close()
 
     async def connect(
+        self, peer_id: ID, addresses: Iterable[Multiaddr] | None = None
+    ) -> tuple[Multiaddr, ...]:
+        if peer_id in self._upgrading:
+            raise HolePunchActiveError(f"DCUtR upgrade already active for {peer_id}")
+        self._upgrading.add(peer_id)
+        try:
+            return await self._connect_attempts(peer_id, addresses)
+        finally:
+            self._upgrading.discard(peer_id)
+
+    async def _connect_attempts(
         self, peer_id: ID, addresses: Iterable[Multiaddr] | None = None
     ) -> tuple[Multiaddr, ...]:
         """Exchange DCUtR candidates over an existing connection."""
