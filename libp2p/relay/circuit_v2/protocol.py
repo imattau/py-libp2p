@@ -28,6 +28,10 @@ from libp2p.host.resource_manager import (
 from libp2p.io.abc import (
     ReadWriteCloser,
 )
+from libp2p.network.events import (
+    EventDisconnected,
+    EventSubscription,
+)
 from libp2p.peer.id import (
     ID,
 )
@@ -145,6 +149,7 @@ class CircuitV2Protocol(Service):
 
     async def run(self, *, task_status: Any = trio.TASK_STATUS_IGNORED) -> None:
         """Run the protocol service."""
+        disconnected: EventSubscription[EventDisconnected] | None = None
         try:
             # Register protocol handlers
             if self.allow_hop:
@@ -152,6 +157,13 @@ class CircuitV2Protocol(Service):
                 self.host.set_stream_handler(PROTOCOL_ID, self._handle_hop_stream)
                 self.host.set_stream_handler(STOP_PROTOCOL_ID, self._handle_stop_stream)
                 logger.debug("Stream handlers registered successfully")
+                disconnected = await self.host.get_network().get_event_bus().subscribe(
+                    EventDisconnected
+                )
+                self.manager.run_daemon_task(
+                    self._consume_disconnected_events,
+                    disconnected,
+                )
 
             # Signal that we're ready
             self.event_started.set()
@@ -161,6 +173,9 @@ class CircuitV2Protocol(Service):
             # Wait for service to be stopped
             await self.manager.wait_finished()
         finally:
+            if disconnected is not None:
+                await disconnected.unsubscribe()
+
             # Clean up any active relay connections
             for src_stream, dst_stream in self._active_relays.values():
                 await self._close_stream(src_stream)
@@ -177,6 +192,15 @@ class CircuitV2Protocol(Service):
                     host_with_handlers.remove_stream_handler(STOP_PROTOCOL_ID)
                 except Exception as e:
                     logger.error("Error unregistering stream handlers: %s", str(e))
+
+    async def _consume_disconnected_events(
+        self,
+        subscription: EventSubscription[EventDisconnected],
+    ) -> None:
+        async for event in subscription:
+            self.resource_manager.release_reservation(
+                event.conn.muxed_conn.peer_id
+            )
 
     async def _close_stream(self, stream: INetStream | None) -> None:
         """Helper function to safely close a stream."""

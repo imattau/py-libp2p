@@ -266,6 +266,12 @@ class RelayResourceManager:
         reservation = self._reservations.get(peer_id)
         return reservation is not None and not reservation.is_expired()
 
+    def release_reservation(self, peer_id: ID) -> None:
+        """Release a peer's reservation after its connection closes."""
+        reservation = self._reservations.pop(peer_id, None)
+        if reservation is not None:
+            reservation.release_resources()
+
     def _clean_expired(self) -> None:
         """Remove expired reservations."""
         now = time.time()
