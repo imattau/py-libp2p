@@ -1,9 +1,14 @@
 import pytest
+from multiaddr import Multiaddr
 import trio
 from trio.testing import memory_stream_pair
 
+from libp2p import new_swarm
 from libp2p.crypto.ed25519 import create_new_key_pair
+from libp2p.peer.peerstore import PeerStore
+from libp2p.security.tls import TLS_PROTOCOL_ID
 from libp2p.security.tls.transport import TLSTransport
+from libp2p.tools.async_service import background_trio_service
 
 
 class RawMemoryConnection:
@@ -80,3 +85,28 @@ async def test_tls_transport_rejects_unexpected_peer_id():
     async with trio.open_nursery() as nursery:
         nursery.start_soon(secure_outbound)
         nursery.start_soon(secure_inbound)
+
+
+@pytest.mark.trio
+async def test_tls_transport_negotiates_through_swarm():
+    key_pair_0 = create_new_key_pair(seed=b"5" * 32)
+    key_pair_1 = create_new_key_pair(seed=b"6" * 32)
+    swarm_0 = new_swarm(
+        key_pair=key_pair_0,
+        peerstore_opt=PeerStore(),
+        sec_opt={TLS_PROTOCOL_ID: TLSTransport(key_pair_0)},
+    )
+    swarm_1 = new_swarm(
+        key_pair=key_pair_1,
+        peerstore_opt=PeerStore(),
+        sec_opt={TLS_PROTOCOL_ID: TLSTransport(key_pair_1)},
+    )
+
+    async with background_trio_service(swarm_0), background_trio_service(swarm_1):
+        assert await swarm_1.listen(Multiaddr("/ip4/127.0.0.1/tcp/0"))
+        listen_addr = next(iter(swarm_1.listeners.values())).get_addrs()[0]
+        swarm_0.peerstore.add_addrs(swarm_1.get_peer_id(), [listen_addr], 60_000)
+
+        connection = await swarm_0.dial_peer(swarm_1.get_peer_id())
+
+        assert connection.muxed_conn.peer_id == swarm_1.get_peer_id()
