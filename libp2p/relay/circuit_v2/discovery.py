@@ -20,6 +20,7 @@ import trio
 
 from libp2p.abc import (
     IHost,
+    INetStream,
 )
 from libp2p.custom_types import (
     TProtocol,
@@ -71,6 +72,7 @@ class RelayInfo:
     has_reservation: bool = False
     reservation_expires_at: float | None = None
     reservation_data_limit: int | None = None
+    reservation_stream: INetStream | None = None
 
 
 class RelayDiscovery(Service):
@@ -410,7 +412,12 @@ class RelayDiscovery(Service):
                         if status_code == StatusCode.OK:
                             # Update relay info with reservation details
                             relay_info = self._discovered_relays[peer_id]
+                            previous_stream = relay_info.reservation_stream
+                            if previous_stream is not None:
+                                await previous_stream.close()
                             relay_info.has_reservation = True
+                            relay_info.reservation_stream = stream
+                            stream = None
 
                             if response.HasField("reservation") and response.HasField(
                                 "limit"
@@ -448,7 +455,7 @@ class RelayDiscovery(Service):
             logger.error("Error making reservation with relay %s: %s", peer_id, str(e))
             return False
         finally:
-            # Always close the stream
+            # Keep successful reservation streams alive; close failed attempts.
             if stream:
                 try:
                     await stream.close()
@@ -477,6 +484,9 @@ class RelayDiscovery(Service):
                 relay_info.has_reservation = False
                 relay_info.reservation_expires_at = None
                 relay_info.reservation_data_limit = None
+                if relay_info.reservation_stream is not None:
+                    await relay_info.reservation_stream.close()
+                    relay_info.reservation_stream = None
 
                 # If auto-reserve is enabled, try to renew
                 if self.auto_reserve:
@@ -484,6 +494,9 @@ class RelayDiscovery(Service):
 
         # Remove expired relays
         for peer_id in to_remove:
+            reservation_stream = self._discovered_relays[peer_id].reservation_stream
+            if reservation_stream is not None:
+                await reservation_stream.close()
             del self._discovered_relays[peer_id]
             if peer_id in self._protocol_cache:
                 del self._protocol_cache[peer_id]
