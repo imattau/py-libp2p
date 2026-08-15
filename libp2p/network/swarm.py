@@ -211,7 +211,11 @@ class Swarm(Service, INetworkService):
         raw_conn = None
         # Transport dials peer (gets back a raw conn)
         try:
-            if hole_punch and hasattr(self.transport, "dial_hole_punch"):
+            if (
+                hole_punch
+                and getattr(self.transport, "supports_hole_punching", False)
+                and hasattr(self.transport, "dial_hole_punch")
+            ):
                 local_addrs = tuple(
                     address
                     for listener in self.listeners.values()

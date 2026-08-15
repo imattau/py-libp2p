@@ -139,6 +139,8 @@ class TCPListener(IListener):
 
 
 class TCP(ITransport):
+    supports_hole_punching = True
+
     async def dial_hole_punch(
         self, maddr: Multiaddr, local_maddr: Multiaddr
     ) -> IRawConnection:
