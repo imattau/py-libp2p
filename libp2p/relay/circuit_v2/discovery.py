@@ -140,6 +140,13 @@ class RelayDiscovery(Service):
                     await self._cleanup_expired()
 
         finally:
+            # Reservation streams must be closed even when the service is
+            # cancelled while sleeping in the discovery loop.
+            with trio.move_on_after(5, shield=True):
+                for relay_info in self._discovered_relays.values():
+                    if relay_info.reservation_stream is not None:
+                        await relay_info.reservation_stream.close()
+                        relay_info.reservation_stream = None
             self.is_running = False
 
     async def discover_relays(self) -> None:
