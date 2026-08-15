@@ -1,5 +1,6 @@
 import pytest
 
+from libp2p.transport.webrtc.aiortc_engine import SessionDescription
 from libp2p.transport.webrtc.signaling import (
     WEBRTC_DIRECT_CREDENTIAL_PREFIX,
     WEBRTC_NOISE_PROLOGUE_PREFIX,
@@ -9,6 +10,8 @@ from libp2p.transport.webrtc.signaling import (
     munge_direct_sdp,
     new_direct_credentials,
     noise_prologue,
+    session_description_from_message,
+    session_description_message,
 )
 
 
@@ -86,3 +89,21 @@ def test_ice_candidate_is_compact_deterministic_json() -> None:
 
     assert message.type is WebRTCSignalingType.ICE_CANDIDATE
     assert message.data == '{"candidate":"abc","sdpMid":"0"}'
+
+
+@pytest.mark.parametrize("description_type", ["offer", "answer"])
+def test_session_description_signaling_conversion(description_type: str) -> None:
+    description = SessionDescription(description_type, "v=0\\r\\n")
+
+    message = session_description_message(description)
+
+    assert session_description_from_message(message) == description
+
+
+def test_session_description_signaling_rejects_unsupported_types() -> None:
+    with pytest.raises(ValueError, match="unsupported"):
+        session_description_message(SessionDescription("pranswer", "v=0"))
+    with pytest.raises(ValueError, match="does not contain SDP"):
+        session_description_from_message(
+            WebRTCSignalingMessage(WebRTCSignalingType.ICE_CANDIDATE, "{}")
+        )

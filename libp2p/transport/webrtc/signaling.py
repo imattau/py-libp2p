@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 import json
 import secrets
+from typing import TYPE_CHECKING
 
 from libp2p.abc import INetStream
 from libp2p.utils.varint import (
@@ -12,6 +13,9 @@ from libp2p.utils.varint import (
     encode_varint_prefixed,
     read_varint_prefixed_bytes,
 )
+
+if TYPE_CHECKING:
+    from .aiortc_engine import SessionDescription
 
 WEBRTC_DIRECT_CREDENTIAL_PREFIX = "libp2p+webrtc+v1/"
 WEBRTC_NOISE_PROLOGUE_PREFIX = b"libp2p-webrtc-noise:"
@@ -23,6 +27,39 @@ class WebRTCSignalingType(IntEnum):
     SDP_OFFER = 0
     SDP_ANSWER = 1
     ICE_CANDIDATE = 2
+
+
+def session_description_message(
+    description: "SessionDescription",
+) -> "WebRTCSignalingMessage":
+    """Convert an aiortc session description to a signaling message."""
+    try:
+        message_type = {
+            "offer": WebRTCSignalingType.SDP_OFFER,
+            "answer": WebRTCSignalingType.SDP_ANSWER,
+        }[description.type]
+    except KeyError as error:
+        raise ValueError(
+            f"unsupported WebRTC session description: {description.type}"
+        ) from error
+    return WebRTCSignalingMessage(message_type, description.sdp)
+
+
+def session_description_from_message(
+    message: "WebRTCSignalingMessage",
+) -> "SessionDescription":
+    """Convert an SDP signaling message to an aiortc session description."""
+    if message.type not in {
+        WebRTCSignalingType.SDP_OFFER,
+        WebRTCSignalingType.SDP_ANSWER,
+    }:
+        raise ValueError("WebRTC signaling message does not contain SDP")
+    from .aiortc_engine import SessionDescription
+
+    description_type = (
+        "offer" if message.type is WebRTCSignalingType.SDP_OFFER else "answer"
+    )
+    return SessionDescription(description_type, message.data)
 
 
 @dataclass(frozen=True)

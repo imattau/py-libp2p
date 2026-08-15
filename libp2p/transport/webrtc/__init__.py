@@ -24,6 +24,8 @@ from .signaling import (
     new_direct_credentials,
     noise_prologue,
     read_signaling_message,
+    session_description_from_message,
+    session_description_message,
     write_signaling_message,
 )
 
@@ -47,5 +49,7 @@ __all__ = [
     "new_direct_credentials",
     "noise_prologue",
     "read_signaling_message",
+    "session_description_from_message",
+    "session_description_message",
     "write_signaling_message",
 ]
