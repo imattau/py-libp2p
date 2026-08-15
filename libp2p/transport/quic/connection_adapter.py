@@ -1,3 +1,4 @@
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import trio
@@ -14,9 +15,15 @@ from .stream_manager import QuicStreamManager
 class QuicConnectionAdapter:
     """Connect the Trio driver, stream manager, and native QUIC backend."""
 
-    def __init__(self, connection: Any, muxed_conn: object) -> None:
+    def __init__(
+        self,
+        connection: Any,
+        muxed_conn: object,
+        flush_output: Callable[[], Awaitable[None]] | None = None,
+    ) -> None:
         self.connection = connection
         self.muxed_conn = muxed_conn
+        self._external_flush_output = flush_output
         self._incoming_send, self._incoming_receive = trio.open_memory_channel(100)
         self._driver: QuicTrioDriver | None = None
         self._manager = QuicStreamManager(
@@ -55,6 +62,9 @@ class QuicConnectionAdapter:
             raise RuntimeError("too many pending incoming QUIC streams") from error
 
     async def _flush_output(self) -> None:
+        if self._external_flush_output is not None:
+            await self._external_flush_output()
+            return
         if self._driver is None:
             raise RuntimeError("QUIC connection is not running")
         await self._driver._process_backend()

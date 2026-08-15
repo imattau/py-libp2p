@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import trio
@@ -14,8 +14,16 @@ from .events import normalize_event
 class QuicDatagramDispatcher:
     """Route UDP datagrams to QUIC connections sharing one socket."""
 
-    def __init__(self, socket: Any) -> None:
+    def __init__(
+        self,
+        socket: Any,
+        on_unknown: Callable[
+            [Any], Awaitable[tuple[QuicConnectionBackend, Callable[[Any], None]] | None]
+        ]
+        | None = None,
+    ) -> None:
         self.socket = socket
+        self.on_unknown = on_unknown
         self._routes: dict[
             Any, tuple[QuicConnectionBackend, Callable[[Any], None]]
         ] = {}
@@ -43,6 +51,10 @@ class QuicDatagramDispatcher:
         self, data: bytes, addr: Any, now: float | None = None
     ) -> bool:
         route = self._routes.get(addr)
+        if route is None and self.on_unknown is not None:
+            route = await self.on_unknown(addr)
+            if route is not None:
+                self._routes[addr] = route
         if route is None:
             return False
 
@@ -53,5 +65,12 @@ class QuicDatagramDispatcher:
             connection,
             lambda event: handle_event(normalize_event(event)),
         )
-        await flush_datagrams(connection, self.socket.sendto, timestamp)
+        await self.flush_connection(addr, timestamp)
         return True
+
+    async def flush_connection(self, addr: Any, now: float | None = None) -> int:
+        route = self._routes.get(addr)
+        if route is None:
+            return 0
+        timestamp = trio.current_time() if now is None else now
+        return await flush_datagrams(route[0], self.socket.sendto, timestamp)

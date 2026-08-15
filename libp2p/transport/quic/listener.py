@@ -4,9 +4,12 @@ from multiaddr import Multiaddr
 import trio
 
 from libp2p.abc import IListener
+from libp2p.crypto.keys import KeyPair
 from libp2p.custom_types import THandler
 
 from .config import QUIC_V1_MULTIADDR_PROTOCOL
+from .connection import create_quic_connection
+from .connection_adapter import QuicConnectionAdapter
 from .dispatcher import QuicDatagramDispatcher
 from .driver import QuicConnectionBackend
 from .socket import TrioQuicDatagramSocket
@@ -15,8 +18,13 @@ from .socket import TrioQuicDatagramSocket
 class QuicListener(IListener):
     """Bind one UDP socket and run the shared QUIC dispatcher."""
 
-    def __init__(self, handler_function: THandler) -> None:
+    def __init__(
+        self,
+        handler_function: THandler,
+        key_pair: KeyPair | None = None,
+    ) -> None:
         self.handler = handler_function
+        self.key_pair = key_pair
         self._socket: TrioQuicDatagramSocket | None = None
         self._dispatcher: QuicDatagramDispatcher | None = None
         self._nursery: trio.Nursery | None = None
@@ -38,6 +46,7 @@ class QuicListener(IListener):
 
         self._socket = socket
         self._dispatcher = QuicDatagramDispatcher(socket)
+        self._dispatcher.on_unknown = self._accept_unknown
         self._nursery = nursery
         self._cancel_scope = trio.CancelScope()
         nursery.start_soon(self._run_dispatcher)
@@ -70,6 +79,20 @@ class QuicListener(IListener):
         self._socket = None
         self._dispatcher = None
         self._addrs = ()
+
+    async def _accept_unknown(
+        self, addr: object
+    ) -> tuple[QuicConnectionBackend, Callable[[object], None]] | None:
+        if self.key_pair is None or self._dispatcher is None or self._nursery is None:
+            return None
+        connection = create_quic_connection(is_client=False, key_pair=self.key_pair)
+        adapter = QuicConnectionAdapter(
+            connection,
+            object(),
+            lambda: self._dispatcher.flush_connection(addr),
+        )
+        self._nursery.start_soon(self.handler, adapter)
+        return connection, adapter._handle_event
 
     async def _run_dispatcher(self) -> None:
         assert self._dispatcher is not None
