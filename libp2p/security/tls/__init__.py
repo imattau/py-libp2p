@@ -10,6 +10,7 @@ from .certificate import (
     LIBP2P_TLS_HANDSHAKE_PREFIX,
     create_libp2p_certificate,
     peer_id_from_certificate,
+    public_key_from_certificate,
 )
 from .identity import TLSIdentity
 from .context import create_tls_context
@@ -22,6 +23,7 @@ __all__ = [
     "LIBP2P_TLS_HANDSHAKE_PREFIX",
     "create_libp2p_certificate",
     "peer_id_from_certificate",
+    "public_key_from_certificate",
     "TLSIdentity",
     "create_tls_context",
     "TLSTransport",

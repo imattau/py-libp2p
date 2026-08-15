@@ -7,8 +7,8 @@ from libp2p.security.base_session import BaseSession
 from libp2p.security.exceptions import HandshakeFailure
 
 from .certificate import (
-    LIBP2P_PUBLIC_KEY_EXTENSION,
     peer_id_from_certificate,
+    public_key_from_certificate,
 )
 from .context import create_tls_context
 from .identity import TLSIdentity
@@ -54,7 +54,7 @@ class TLSConnection:
             if certificate is None:
                 raise HandshakeFailure("TLS peer certificate is missing")
             peer_id = peer_id_from_certificate(certificate)
-            public_key = _public_key_from_certificate(certificate)
+            public_key = public_key_from_certificate(certificate)
             self._handshaken = True
             return peer_id, public_key
         except HandshakeFailure:
@@ -148,25 +148,3 @@ class TLSSession(BaseSession):
 
     def get_remote_address(self) -> tuple[str, int] | None:
         return self.connection.get_remote_address()
-
-
-def _public_key_from_certificate(certificate: object) -> PublicKey:
-    from cryptography import x509
-
-    from libp2p.crypto.serialization import deserialize_public_key
-
-    if not isinstance(certificate, x509.Certificate):
-        raise HandshakeFailure("invalid TLS peer certificate")
-    extension = certificate.extensions.get_extension_for_oid(
-        LIBP2P_PUBLIC_KEY_EXTENSION
-    )
-    value = extension.value.value
-    length = value[1]
-    offset = 2
-    if length & 0x80:
-        size = length & 0x7F
-        length = int.from_bytes(value[offset : offset + size], "big")
-        offset += size
-    key_length = value[offset + 1]
-    key_offset = offset + 2
-    return deserialize_public_key(value[key_offset : key_offset + key_length])

@@ -58,6 +58,44 @@ def _decode_der_octet_string(data: bytes, offset: int) -> tuple[bytes, int]:
     return data[offset:end], end
 
 
+def _signed_key_from_certificate(
+    certificate: x509.Certificate,
+) -> tuple[object, bytes]:
+    try:
+        extension = certificate.extensions.get_extension_for_oid(
+            LIBP2P_PUBLIC_KEY_EXTENSION
+        )
+    except x509.ExtensionNotFound as error:
+        raise ValueError("libp2p TLS public-key extension is missing") from error
+
+    signed_key = extension.value.value
+    if len(signed_key) < 2 or signed_key[0] != 0x30:
+        raise ValueError("invalid libp2p TLS signed-key sequence")
+    sequence_length = signed_key[1]
+    sequence_offset = 2
+    if sequence_length & 0x80:
+        size = sequence_length & 0x7F
+        if size == 0 or sequence_offset + size > len(signed_key):
+            raise ValueError("invalid libp2p TLS signed-key length")
+        sequence_length = int.from_bytes(
+            signed_key[sequence_offset : sequence_offset + size], "big"
+        )
+        sequence_offset += size
+    sequence_end = sequence_offset + sequence_length
+    if sequence_end != len(signed_key):
+        raise ValueError("invalid libp2p TLS signed-key sequence length")
+    public_key_bytes, offset = _decode_der_octet_string(signed_key, sequence_offset)
+    signature, offset = _decode_der_octet_string(signed_key, offset)
+    if offset != sequence_end:
+        raise ValueError("invalid libp2p TLS signed-key fields")
+    return deserialize_public_key(public_key_bytes), signature
+
+
+def public_key_from_certificate(certificate: x509.Certificate) -> object:
+    """Extract the authenticated libp2p public key from a certificate."""
+    return _signed_key_from_certificate(certificate)[0]
+
+
 def peer_id_from_certificate(certificate: x509.Certificate) -> ID:
     """Validate a libp2p TLS certificate and return its authenticated peer ID."""
     now = datetime.now(timezone.utc)
@@ -96,35 +134,7 @@ def peer_id_from_certificate(certificate: x509.Certificate) -> ID:
     except InvalidSignature as error:
         raise ValueError("invalid libp2p TLS certificate signature") from error
 
-    try:
-        extension = certificate.extensions.get_extension_for_oid(
-            LIBP2P_PUBLIC_KEY_EXTENSION
-        )
-    except x509.ExtensionNotFound as error:
-        raise ValueError("libp2p TLS public-key extension is missing") from error
-
-    signed_key = extension.value.value
-    if len(signed_key) < 2 or signed_key[0] != 0x30:
-        raise ValueError("invalid libp2p TLS signed-key sequence")
-    sequence_length = signed_key[1]
-    sequence_offset = 2
-    if sequence_length & 0x80:
-        size = sequence_length & 0x7F
-        if size == 0 or sequence_offset + size > len(signed_key):
-            raise ValueError("invalid libp2p TLS signed-key length")
-        sequence_length = int.from_bytes(
-            signed_key[sequence_offset : sequence_offset + size], "big"
-        )
-        sequence_offset += size
-    sequence_end = sequence_offset + sequence_length
-    if sequence_end != len(signed_key):
-        raise ValueError("invalid libp2p TLS signed-key sequence length")
-    public_key_bytes, offset = _decode_der_octet_string(signed_key, sequence_offset)
-    signature, offset = _decode_der_octet_string(signed_key, offset)
-    if offset != sequence_end:
-        raise ValueError("invalid libp2p TLS signed-key fields")
-
-    public_key = deserialize_public_key(public_key_bytes)
+    public_key, signature = _signed_key_from_certificate(certificate)
     certificate_public_key = certificate.public_key().public_bytes(
         Encoding.DER, PublicFormat.SubjectPublicKeyInfo
     )
