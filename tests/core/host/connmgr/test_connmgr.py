@@ -241,3 +241,28 @@ async def test_conn_manager_background_service_trims_at_high_water(
         with trio.fail_after(1):
             while managed_host.get_connected_peers() != [peers[-1].get_id()]:
                 await trio.sleep(0.01)
+
+
+@pytest.mark.trio
+async def test_conn_manager_consumes_event_bus(security_protocol):
+    connmgr = BasicConnMgr.new(
+        low_water=1,
+        high_water=2,
+        grace_period=0,
+        silence_period=0,
+    )
+    async with HostFactory.create_batch_and_listen(
+        3, security_protocol=security_protocol
+    ) as hosts:
+        managed_host = hosts[0]
+        connmgr.bind_event_bus(managed_host.get_network())
+        peers = hosts[1:]
+
+        async with background_trio_service(connmgr):
+            for index, host in enumerate(peers):
+                connmgr.tag_peer(host.get_id(), "score", index)
+                await managed_host.connect(info_from_p2p_addr(host.get_addrs()[0]))
+
+            with trio.fail_after(1):
+                while managed_host.get_connected_peers() != [peers[-1].get_id()]:
+                    await trio.sleep(0.01)

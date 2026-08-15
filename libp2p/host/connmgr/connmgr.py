@@ -14,6 +14,11 @@ from libp2p.abc import (
     INetwork,
     INotifee,
 )
+from libp2p.network.events import (
+    EventConnected,
+    EventDisconnected,
+    EventSubscription,
+)
 from libp2p.peer.id import (
     ID,
 )
@@ -91,11 +96,14 @@ class BasicConnMgr(Service, INotifee):
     unprotected peers until the low watermark is reached.
     """
 
+    event_bus_consumer = True
+
     def __init__(self, config: ConnManagerConfig) -> None:
         self.config = config
         self._peer_info: dict[ID, TagInfo] = {}
         self._protected: dict[ID, set[str]] = {}
         self._network: INetwork | None = None
+        self._event_bus = None
         self._last_trim = 0.0
         self._lock = trio.Lock()
 
@@ -191,17 +199,53 @@ class BasicConnMgr(Service, INotifee):
             return await self._trim_open_conns(network)
 
     async def run(self) -> None:
-        while True:
-            with trio.move_on_after(self._background_interval()):
-                await self.manager.wait_finished()
-                return
+        if self._event_bus is not None:
+            connected = await self._event_bus.subscribe(EventConnected)
+            disconnected = await self._event_bus.subscribe(EventDisconnected)
+            self.manager.run_daemon_task(
+                self._consume_connected_events, connected
+            )
+            self.manager.run_daemon_task(
+                self._consume_disconnected_events, disconnected
+            )
+        else:
+            connected = disconnected = None
 
-            network = self._network
-            if (
-                network is not None
-                and len(network.connections) >= self.config.high_water
-            ):
-                await self.trim_open_conns(network)
+        try:
+            while True:
+                with trio.move_on_after(self._background_interval()):
+                    await self.manager.wait_finished()
+                    return
+
+                network = self._network
+                if (
+                    network is not None
+                    and len(network.connections) >= self.config.high_water
+                ):
+                    await self.trim_open_conns(network)
+        finally:
+            if connected is not None:
+                await connected.unsubscribe()
+            if disconnected is not None:
+                await disconnected.unsubscribe()
+
+    def bind_event_bus(self, network: INetwork) -> None:
+        self._network = network
+        self._event_bus = network.get_event_bus()
+
+    async def _consume_connected_events(
+        self, subscription: EventSubscription[EventConnected]
+    ) -> None:
+        async for event in subscription:
+            if self._network is not None:
+                await self.connected(self._network, event.conn)
+
+    async def _consume_disconnected_events(
+        self, subscription: EventSubscription[EventDisconnected]
+    ) -> None:
+        async for event in subscription:
+            if self._network is not None:
+                await self.disconnected(self._network, event.conn)
 
     async def force_trim(self, network: INetwork) -> list[ID]:
         async with self._lock:

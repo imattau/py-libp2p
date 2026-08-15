@@ -113,7 +113,10 @@ class BasicHost(IHost):
             self.bootstrap = BootstrapDiscovery(network, bootstrap)
         self.conn_manager = conn_manager
         if conn_manager is not None:
-            self._network.register_notifee(conn_manager)
+            if getattr(conn_manager, "event_bus_consumer", False):
+                conn_manager.bind_event_bus(self._network)
+            else:
+                self._network.register_notifee(conn_manager)
 
     def get_id(self) -> ID:
         """

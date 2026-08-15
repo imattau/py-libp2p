@@ -76,11 +76,13 @@ as the first step.
    swarm lifecycle, and ``libp2p.network.events.EventBus`` provides typed
    subscription/filter semantics for the same events. Pubsub now consumes typed
    connected/disconnected events directly and retains its existing peer queues.
+   The connection manager also supports binding to the event bus for its
+   connected/disconnected lifecycle input.
 
    Remaining parity work:
 
-   * Migrate identify, AutoNAT, connection manager, and remaining resource-manager
-     integration points onto the shared event surface where appropriate.
+   * Migrate identify, AutoNAT, and remaining resource-manager integration points
+     onto the shared event surface where appropriate.
    * Extend event ordering/backpressure coverage as more services consume the bus.
    *Status: in progress. Effort remaining: low. Risk: low. Depends on: connmgr.*
 
