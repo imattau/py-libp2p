@@ -13,6 +13,7 @@ from libp2p.utils.varint import decode_uvarint_from_stream, encode_varint_prefix
 
 HOLEPUNCH_PROTOCOL_ID = TProtocol("/libp2p/dcutr")
 MAX_MESSAGE_SIZE = 4096
+MAX_ATTEMPTS = 3
 
 logger = logging.getLogger("libp2p.host.holepunch")
 
@@ -111,25 +112,40 @@ class HolePunchService:
         self, peer_id: ID, addresses: Iterable[Multiaddr] | None = None
     ) -> tuple[Multiaddr, ...]:
         """Exchange DCUtR candidates over an existing connection."""
-        stream = await self.host.new_stream(peer_id, [HOLEPUNCH_PROTOCOL_ID])
-        try:
-            await stream.write(
-                self._message(
-                    HolePunch.CONNECT,
-                    self._candidate_addrs() if addresses is None else addresses,
+        local_addresses = (
+            self._candidate_addrs() if addresses is None else tuple(addresses)
+        )
+        last_error: Exception | None = None
+        for attempt in range(MAX_ATTEMPTS):
+            stream = await self.host.new_stream(peer_id, [HOLEPUNCH_PROTOCOL_ID])
+            try:
+                await stream.write(
+                    self._message(HolePunch.CONNECT, local_addresses)
                 )
-            )
-            response = await self._read_message(stream)
-            if response.type != HolePunch.CONNECT:
-                raise HolePunchProtocolError("expected DCUtR CONNECT response")
-            remote_addresses = self._addresses(response)
-            await stream.write(self._message(HolePunch.SYNC, ()))
-            direct_addresses = self._direct_addresses(remote_addresses)
-            dial_peer_direct = getattr(
-                self.host.get_network(), "dial_peer_direct", None
-            )
-            if direct_addresses and dial_peer_direct is not None:
-                await dial_peer_direct(peer_id, direct_addresses)
-            return remote_addresses
-        finally:
-            await stream.close()
+                response = await self._read_message(stream)
+                if response.type != HolePunch.CONNECT:
+                    raise HolePunchProtocolError("expected DCUtR CONNECT response")
+                remote_addresses = self._addresses(response)
+                await stream.write(self._message(HolePunch.SYNC, ()))
+                direct_addresses = self._direct_addresses(remote_addresses)
+                dial_peer_direct = getattr(
+                    self.host.get_network(), "dial_peer_direct", None
+                )
+                if direct_addresses and dial_peer_direct is not None:
+                    await dial_peer_direct(peer_id, direct_addresses)
+                return remote_addresses
+            except Exception as error:
+                last_error = error
+                logger.debug(
+                    "DCUtR attempt %d/%d failed for peer %s",
+                    attempt + 1,
+                    MAX_ATTEMPTS,
+                    peer_id,
+                    exc_info=error,
+                )
+                if attempt + 1 == MAX_ATTEMPTS:
+                    raise
+            finally:
+                await stream.close()
+
+        raise HolePunchProtocolError("DCUtR attempts exhausted") from last_error

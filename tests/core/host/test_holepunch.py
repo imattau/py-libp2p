@@ -76,6 +76,38 @@ async def test_connect_exchanges_candidates_and_syncs() -> None:
 
 
 @pytest.mark.trio
+async def test_connect_retries_after_direct_dial_failure() -> None:
+    response = HolePunch(type=HolePunch.CONNECT, ObsAddrs=[ADDR.to_bytes()])
+    streams = [
+        MemoryStream(encode_varint_prefixed(response.SerializeToString()))
+        for _ in range(2)
+    ]
+
+    class RetryHost(FakeHost):
+        def __init__(self) -> None:
+            super().__init__(streams[0], RetryNetwork())
+            self.streams = streams
+
+        async def new_stream(self, peer_id, protocols):
+            return self.streams.pop(0)
+
+    class RetryNetwork:
+        def __init__(self) -> None:
+            self.attempts = 0
+
+        async def dial_peer_direct(self, peer_id, addresses) -> None:
+            self.attempts += 1
+            if self.attempts == 1:
+                raise RuntimeError("direct dial failed")
+
+    host = RetryHost()
+    service = HolePunchService(host)
+
+    assert await service.connect(b"peer") == (ADDR,)
+    assert host.network.attempts == 2
+
+
+@pytest.mark.trio
 async def test_handler_rejects_sync_as_first_message() -> None:
     sync = HolePunch(type=HolePunch.SYNC)
     stream = MemoryStream(encode_varint_prefixed(sync.SerializeToString()))
