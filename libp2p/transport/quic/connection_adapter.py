@@ -4,6 +4,7 @@ from typing import Any
 import trio
 
 from .config import QuicTransportConfig
+from .connection import peer_id_from_certificate
 from .driver import (
     QuicDatagramSocket,
     QuicTrioDriver,
@@ -32,6 +33,7 @@ class QuicConnectionAdapter:
         self._driver: QuicTrioDriver | None = None
         self._handshake_complete = trio.Event()
         self._closed = trio.Event()
+        self.remote_peer_id = None
         self._manager = QuicStreamManager(
             connection,
             muxed_conn,
@@ -67,6 +69,11 @@ class QuicConnectionAdapter:
     def _handle_event(self, event: object) -> None:
         self._manager.handle_event(event)
         if isinstance(event, QuicHandshakeComplete):
+            certificate = getattr(self.connection, "tls", None)
+            certificate = getattr(certificate, "_peer_certificate", None)
+            if certificate is None:
+                raise ValueError("QUIC handshake did not provide a peer certificate")
+            self.remote_peer_id = peer_id_from_certificate(certificate)
             self._handshake_complete.set()
         elif isinstance(event, QuicConnectionClosed):
             self._closed.set()

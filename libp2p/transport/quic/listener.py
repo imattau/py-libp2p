@@ -93,6 +93,13 @@ class QuicListener(IListener):
             key_pair=self.key_pair,
             original_destination_connection_id=header.destination_cid,
         )
+        initialize = connection._initialize
+
+        def initialize_with_client_certificate(peer_cid: bytes) -> None:
+            initialize(peer_cid)
+            connection.tls._request_client_certificate = True
+
+        connection._initialize = initialize_with_client_certificate
         adapter = QuicConnectionAdapter(
             connection,
             object(),

@@ -3,6 +3,7 @@ from multiaddr import Multiaddr
 import trio
 
 from libp2p.crypto.ed25519 import create_new_key_pair
+from libp2p.peer.id import ID
 from libp2p.transport.quic.dialer import QuicDialer
 from libp2p.transport.quic.listener import QuicListener
 
@@ -16,6 +17,7 @@ async def test_dialer_completes_localhost_quic_handshake():
 
     async def handle_server_connection(connection):
         server_connections.append(connection)
+        await connection.wait_handshake()
         server_ready.set()
         await trio.sleep_forever()
 
@@ -31,7 +33,11 @@ async def test_dialer_completes_localhost_quic_handshake():
         )
         await server_ready.wait()
         assert client.connection.configuration.is_client
+        assert client.remote_peer_id == ID.from_pubkey(server_key_pair.public_key)
         assert server_connections
+        assert server_connections[0].remote_peer_id == ID.from_pubkey(
+            client_key_pair.public_key
+        )
         nursery.cancel_scope.cancel()
 
     await listener.close()

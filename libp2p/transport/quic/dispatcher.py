@@ -62,6 +62,9 @@ class QuicDatagramDispatcher:
         connection, handle_event = route
         timestamp = trio.current_time() if now is None else now
         connection.receive_datagram(data, addr, timestamp)
+        tls = getattr(connection, "tls", None)
+        if tls is not None and not connection.configuration.is_client:
+            tls._request_client_certificate = True
         drain_events(
             connection,
             lambda event: handle_event(normalize_event(event)),

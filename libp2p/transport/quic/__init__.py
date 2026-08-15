@@ -9,6 +9,7 @@ from .connection import (
     LIBP2P_PUBLIC_KEY_EXTENSION,
     create_libp2p_certificate,
     create_quic_connection,
+    peer_id_from_certificate,
 )
 from .connection_adapter import QuicConnectionAdapter
 from .driver import QuicTrioDriver
@@ -41,5 +42,6 @@ __all__ = (
     "QuicDialer",
     "create_libp2p_certificate",
     "create_quic_connection",
+    "peer_id_from_certificate",
     "QuicConnectionAdapter",
 )
