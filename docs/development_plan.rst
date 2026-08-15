@@ -136,10 +136,12 @@ dependency.
      An optional aiortc peer-connection wrapper now runs behind a dedicated asyncio
      loop thread and exposes SDP plus data-channel operations to Trio. WebRTC Direct
      address parsing and certificate multihash verification are also covered.
-     Offer/answer signaling over the Direct wire protocol and relay-assisted SDP
-     signaling remain.
-     *Status: shared framing, engine boundary, and Direct address trust complete;
-     transport signaling implementations pending. Effort remaining: high. Risk: high.*
+     The browser-to-browser signaling protobuf, uvarint stream framing, ICE
+     candidate messages, and explicit ``init``/negotiated data-channel engine
+     operations are now implemented. The native aiortc listener/dialer, Direct
+     server signaling, and relay-assisted SDP signaling remain.
+     *Status: protocol primitives and engine boundary complete; native transport
+     integration pending. Effort remaining: high. Risk: high.*
 
 P3 — NAT traversal
 ~~~~~~~~~~~~~~~~~~

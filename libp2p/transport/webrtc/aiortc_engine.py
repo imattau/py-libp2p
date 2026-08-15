@@ -54,10 +54,29 @@ class AiortcWebRTCEngine:
             description.sdp,
         )
 
-    async def create_data_channel(self, connection_role: bool) -> WebRTCConnection:
-        """Create the empty-label libp2p data channel and adapt it to Trio."""
+    async def create_data_channel(
+        self,
+        connection_role: bool,
+        *,
+        negotiated: bool = False,
+        channel_id: int | None = None,
+        label: str = "",
+    ) -> WebRTCConnection:
+        """
+        Create a libp2p data channel and adapt it to Trio.
+
+        WebRTC Direct uses ``negotiated=True``, id 0, and an empty label.
+        Browser-to-browser signaling first creates a non-negotiated ``init``
+        channel so the offer contains the SCTP media section.
+        """
         peer_connection = self._require_peer_connection()
-        channel = await self.bridge.call(_create_data_channel, peer_connection)
+        channel = await self.bridge.call(
+            _create_data_channel,
+            peer_connection,
+            label,
+            negotiated,
+            channel_id,
+        )
         connection = WebRTCConnection(
             channel,
             self.bridge.call,
@@ -67,6 +86,34 @@ class AiortcWebRTCEngine:
             _register_message_handler, channel, connection.on_message
         )
         return connection
+
+    async def create_init_data_channel(self) -> None:
+        """Create the browser-to-browser signaling ``init`` channel."""
+        peer_connection = self._require_peer_connection()
+        await self.bridge.call(
+            _create_data_channel, peer_connection, "init", False, None
+        )
+
+    async def create_direct_data_channel(
+        self, connection_role: bool
+    ) -> WebRTCConnection:
+        """Create the negotiated WebRTC Direct channel at SCTP stream 0."""
+        return await self.create_data_channel(
+            connection_role,
+            negotiated=True,
+            channel_id=0,
+            label="",
+        )
+
+    async def add_ice_candidate(self, candidate: Any) -> None:
+        """Pass a browser/aiortc ICE candidate to the peer connection."""
+        peer_connection = self._require_peer_connection()
+        await self.bridge.call(_add_ice_candidate, peer_connection, candidate)
+
+    async def on_data_channel(self, handler: Any) -> None:
+        """Register a Trio-facing callback for remotely-created channels."""
+        peer_connection = self._require_peer_connection()
+        await self.bridge.call(_register_data_channel_handler, peer_connection, handler)
 
     async def close(self) -> None:
         if self._peer_connection is not None:
@@ -125,9 +172,25 @@ async def _set_remote_description(
     )
 
 
-def _create_data_channel(peer_connection: Any) -> Any:
-    return peer_connection.createDataChannel("")
+def _create_data_channel(
+    peer_connection: Any,
+    label: str,
+    negotiated: bool,
+    channel_id: int | None,
+) -> Any:
+    options: dict[str, Any] = {"negotiated": negotiated}
+    if channel_id is not None:
+        options["id"] = channel_id
+    return peer_connection.createDataChannel(label, **options)
+
+
+async def _add_ice_candidate(peer_connection: Any, candidate: Any) -> None:
+    await peer_connection.addIceCandidate(candidate)
 
 
 def _register_message_handler(channel: Any, handler: Any) -> None:
     channel.on("message", handler)
+
+
+def _register_data_channel_handler(peer_connection: Any, handler: Any) -> None:
+    peer_connection.on("datachannel", handler)

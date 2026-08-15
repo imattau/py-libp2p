@@ -149,12 +149,13 @@ The statuses above describe native implementation coverage in the current Trio
 runtime. QUIC, WebSocket, security, AutoNAT, relay-v2, hole punching/DCUtR,
 discovery, routing, connection/resource management, metrics, and IPNS validation
 have native implementations with focused tests. WebRTC currently covers shared
-framing, data-channel adaptation, Direct address validation, and the optional
-aiortc engine boundary; its signaling and full transport integration remain in
-progress. WebTransport is not implemented.
+framing, signaling wire messages, data-channel adaptation, Direct address
+validation, and the optional aiortc engine boundary; its native listener/dialer
+and full transport integration remain in progress. WebTransport is not
+implemented.
 
 Cross-implementation validation and production hardening remain a later phase.
-Remaining gaps include full WebRTC signaling, WebTransport, Kademlia interop and
+Remaining gaps include native WebRTC transport integration, WebTransport, Kademlia interop and
 completeness, IPNS DHT integration and RSA compatibility, multi-connection
 connection-manager parity, and broader Go, JavaScript, and CI interoperability.
 

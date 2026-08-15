@@ -15,10 +15,16 @@ from .aiortc_engine import (
 from .connection import WebRTCConnection
 from .direct import WebRTCDirectAddress
 from .signaling import (
+    WEBRTC_SIGNALING_PROTOCOL,
     WebRTCDirectCredentials,
+    WebRTCSignalingMessage,
+    WebRTCSignalingType,
+    encode_ice_candidate,
     munge_direct_sdp,
     new_direct_credentials,
     noise_prologue,
+    read_signaling_message,
+    write_signaling_message,
 )
 
 __all__ = [
@@ -30,10 +36,16 @@ __all__ = [
     "WebRTCDependencyError",
     "WebRTCFrame",
     "WebRTCDirectCredentials",
+    "WebRTCSignalingMessage",
+    "WebRTCSignalingType",
+    "WEBRTC_SIGNALING_PROTOCOL",
     "SessionDescription",
     "decode_frames",
     "encode_frame",
+    "encode_ice_candidate",
     "munge_direct_sdp",
     "new_direct_credentials",
     "noise_prologue",
+    "read_signaling_message",
+    "write_signaling_message",
 ]

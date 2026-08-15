@@ -1,11 +1,115 @@
 """Protocol helpers shared by the WebRTC Direct signaling flows."""
 
 from dataclasses import dataclass
+from enum import IntEnum
+import json
 import secrets
+
+from libp2p.abc import INetStream
+from libp2p.utils.varint import (
+    decode_varint_with_size,
+    encode_uvarint,
+    encode_varint_prefixed,
+    read_varint_prefixed_bytes,
+)
 
 WEBRTC_DIRECT_CREDENTIAL_PREFIX = "libp2p+webrtc+v1/"
 WEBRTC_NOISE_PROLOGUE_PREFIX = b"libp2p-webrtc-noise:"
 WEBRTC_MAX_MESSAGE_SIZE = 16 * 1024
+WEBRTC_SIGNALING_PROTOCOL = "/webrtc-signaling/0.0.1"
+
+
+class WebRTCSignalingType(IntEnum):
+    SDP_OFFER = 0
+    SDP_ANSWER = 1
+    ICE_CANDIDATE = 2
+
+
+@dataclass(frozen=True)
+class WebRTCSignalingMessage:
+    """One message from the browser-to-browser signaling protocol."""
+
+    type: WebRTCSignalingType
+    data: str
+
+    def encode(self) -> bytes:
+        """Encode the proto3 message, including its uvarint length prefix."""
+        encoded_type = b"\x08" + encode_uvarint(int(self.type))
+        encoded_data = self.data.encode("utf-8")
+        payload = (
+            encoded_type
+            + b"\x12"
+            + encode_uvarint(len(encoded_data))
+            + encoded_data
+        )
+        return encode_varint_prefixed(payload)
+
+    @classmethod
+    def decode(cls, encoded: bytes) -> "WebRTCSignalingMessage":
+        """Decode one length-prefixed signaling message."""
+        length, prefix_size = decode_varint_with_size(encoded)
+        if prefix_size == 0 or len(encoded) != prefix_size + length:
+            raise ValueError("invalid WebRTC signaling message length")
+        payload = encoded[prefix_size:]
+        message_type: int | None = None
+        data: str | None = None
+        offset = 0
+        while offset < len(payload):
+            tag, tag_size = decode_varint_with_size(payload[offset:])
+            if tag_size == 0:
+                raise ValueError("invalid WebRTC signaling field tag")
+            offset += tag_size
+            field_number, wire_type = tag >> 3, tag & 7
+            if field_number == 1 and wire_type == 0:
+                message_type, value_size = decode_varint_with_size(payload[offset:])
+                if value_size == 0:
+                    raise ValueError("invalid WebRTC signaling type")
+                offset += value_size
+            elif field_number == 2 and wire_type == 2:
+                data_length, value_size = decode_varint_with_size(payload[offset:])
+                if value_size == 0:
+                    raise ValueError("invalid WebRTC signaling data length")
+                offset += value_size
+                end = offset + data_length
+                if end > len(payload):
+                    raise ValueError("truncated WebRTC signaling data")
+                try:
+                    data = payload[offset:end].decode("utf-8")
+                except UnicodeDecodeError as error:
+                    raise ValueError("WebRTC signaling data is not UTF-8") from error
+                offset = end
+            else:
+                raise ValueError("unsupported WebRTC signaling field")
+        if message_type is None or data is None:
+            raise ValueError("WebRTC signaling message is missing fields")
+        try:
+            parsed_type = WebRTCSignalingType(message_type)
+        except ValueError as error:
+            raise ValueError(
+                f"unknown WebRTC signaling type: {message_type}"
+            ) from error
+        return cls(parsed_type, data)
+
+
+def encode_ice_candidate(candidate: object) -> WebRTCSignalingMessage:
+    """Encode an aiortc/browser ICE candidate JSON object for signaling."""
+    return WebRTCSignalingMessage(
+        WebRTCSignalingType.ICE_CANDIDATE,
+        json.dumps(candidate, separators=(",", ":"), sort_keys=True),
+    )
+
+
+async def read_signaling_message(stream: INetStream) -> WebRTCSignalingMessage:
+    """Read one length-prefixed message from a libp2p stream."""
+    payload = await read_varint_prefixed_bytes(stream)
+    return WebRTCSignalingMessage.decode(encode_varint_prefixed(payload))
+
+
+async def write_signaling_message(
+    stream: INetStream, message: WebRTCSignalingMessage
+) -> None:
+    """Write one length-prefixed message to a libp2p stream."""
+    await stream.write(message.encode())
 
 
 @dataclass(frozen=True)
