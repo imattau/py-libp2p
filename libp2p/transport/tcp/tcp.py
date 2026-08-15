@@ -58,7 +58,16 @@ class TCPListener(IListener):
         ) -> None:
             """Just a proxy function to add logging here."""
             logger.debug("serve_tcp %s %s", host, port)
-            await trio.serve_tcp(handler, port, host=host, task_status=task_status)
+            sock = trio.socket.socket(trio.socket.AF_INET, trio.socket.SOCK_STREAM)
+            sock.setsockopt(trio.socket.SOL_SOCKET, trio.socket.SO_REUSEADDR, 1)
+            if hasattr(trio.socket, "SO_REUSEPORT"):
+                sock.setsockopt(
+                    trio.socket.SOL_SOCKET, trio.socket.SO_REUSEPORT, 1
+                )
+            await sock.bind((host or "0.0.0.0", port))
+            sock.listen()
+            listener = trio.SocketListener(sock)
+            await trio.serve_listeners(handler, [listener], task_status=task_status)
 
         async def handler(stream: trio.SocketStream) -> None:
             remote_host: str = ""
@@ -130,6 +139,33 @@ class TCPListener(IListener):
 
 
 class TCP(ITransport):
+    async def dial_hole_punch(
+        self, maddr: Multiaddr, local_maddr: Multiaddr
+    ) -> IRawConnection:
+        """Dial from a reusable local TCP endpoint for simultaneous open."""
+        host = maddr.value_for_protocol("ip4")
+        port = maddr.value_for_protocol("tcp")
+        local_host = local_maddr.value_for_protocol("ip4")
+        local_port = local_maddr.value_for_protocol("tcp")
+        if None in (host, port, local_host, local_port):
+            raise OpenConnectionError(f"Cannot hole-punch TCP address {maddr}")
+
+        sock = trio.socket.socket(trio.socket.AF_INET, trio.socket.SOCK_STREAM)
+        try:
+            sock.setsockopt(trio.socket.SOL_SOCKET, trio.socket.SO_REUSEADDR, 1)
+            if hasattr(trio.socket, "SO_REUSEPORT"):
+                sock.setsockopt(
+                    trio.socket.SOL_SOCKET, trio.socket.SO_REUSEPORT, 1
+                )
+            await sock.bind((local_host, int(local_port)))
+            await sock.connect((host, int(port)))
+        except OSError as error:
+            sock.close()
+            raise OpenConnectionError(
+                f"Failed to hole-punch TCP connection to {maddr}: {error}"
+            ) from error
+        return RawConnection(TrioTCPStream(trio.SocketStream(sock)), True)
+
     async def dial(self, maddr: Multiaddr) -> IRawConnection:
         """
         Dial a transport to peer listening on multiaddr.

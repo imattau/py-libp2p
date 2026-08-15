@@ -193,6 +193,7 @@ class Swarm(Service, INetworkService):
         peer_id: ID,
         *,
         replace_existing: bool = False,
+        hole_punch: bool = False,
     ) -> INetConn:
         """
         Try to create a connection to peer_id with addr.
@@ -210,7 +211,17 @@ class Swarm(Service, INetworkService):
         raw_conn = None
         # Transport dials peer (gets back a raw conn)
         try:
-            raw_conn = await self.transport.dial(addr)
+            if hole_punch and hasattr(self.transport, "dial_hole_punch"):
+                local_addrs = tuple(
+                    address
+                    for listener in self.listeners.values()
+                    for address in listener.get_addrs()
+                )
+                if not local_addrs:
+                    raise OpenConnectionError("no local address for TCP hole punch")
+                raw_conn = await self.transport.dial_hole_punch(addr, local_addrs[0])
+            else:
+                raw_conn = await self.transport.dial(addr)
         except OpenConnectionError as error:
             logger.debug("fail to dial peer %s over base transport", peer_id)
             conn_scope.done()
@@ -290,7 +301,7 @@ class Swarm(Service, INetworkService):
         async def attempt(address: Multiaddr) -> None:
             try:
                 connection = await self.dial_addr(
-                    address, peer_id, replace_existing=True
+                    address, peer_id, replace_existing=True, hole_punch=True
                 )
             except Exception as error:
                 await send_channel.send((None, error))
