@@ -12,6 +12,7 @@ from .connection import (
 )
 from .connection_adapter import QuicConnectionAdapter
 from .driver import QuicTrioDriver
+from .dispatcher import QuicDatagramDispatcher
 from .events import (
     QuicConnectionClosed,
     QuicHandshakeComplete,
@@ -27,6 +28,7 @@ __all__ = (
     "LIBP2P_PUBLIC_KEY_EXTENSION",
     "QuicTransportConfig",
     "QuicTrioDriver",
+    "QuicDatagramDispatcher",
     "QuicConnectionClosed",
     "QuicHandshakeComplete",
     "QuicStreamData",
