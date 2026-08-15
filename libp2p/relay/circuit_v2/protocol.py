@@ -439,6 +439,14 @@ class CircuitV2Protocol(Service):
                 return
 
             # Get the source stream from active relays
+            if not stop_msg.HasField("peer") or not stop_msg.peer.id:
+                await self._send_stop_status(
+                    stream,
+                    StatusCode.MALFORMED_MESSAGE,
+                    "Missing stop peer ID",
+                )
+                await self._close_stream(stream)
+                return
             peer_id = ID(stop_msg.peer.id)
             if peer_id not in self._active_relays:
                 # Use direct attribute access to create status object for error response
@@ -494,6 +502,13 @@ class CircuitV2Protocol(Service):
         """Handle a reservation request."""
         peer_id = None
         try:
+            if not msg.HasField("peer") or not msg.peer.id:
+                await self._send_status(
+                    stream,
+                    StatusCode.MALFORMED_MESSAGE,
+                    "Missing reservation peer ID",
+                )
+                return
             peer_id = ID(msg.peer.id)
             logger.debug("Handling reservation request from peer %s", peer_id)
 
@@ -585,6 +600,14 @@ class CircuitV2Protocol(Service):
 
     async def _handle_connect(self, stream: INetStream, msg: Any) -> None:
         """Handle a connect request."""
+        if not msg.HasField("peer") or not msg.peer.id:
+            await self._send_status(
+                stream,
+                StatusCode.MALFORMED_MESSAGE,
+                "Missing connect peer ID",
+            )
+            await stream.reset()
+            return
         peer_id = ID(msg.peer.id)
         dst_stream: INetStream | None = None
 
