@@ -6,7 +6,6 @@ https://github.com/libp2p/specs/blob/master/relay/circuit-v2.md
 """
 
 import logging
-import time
 from typing import (
     Any,
     Protocol as TypingProtocol,
@@ -551,6 +550,7 @@ class CircuitV2Protocol(Service):
             # Accept reservation
             logger.debug("Accepting reservation from peer %s", peer_id)
             ttl = self.resource_manager.reserve(peer_id)
+            reservation = self.resource_manager._reservations[peer_id]
 
             # Send reservation success response
             with trio.fail_after(STREAM_WRITE_TIMEOUT):
@@ -562,10 +562,10 @@ class CircuitV2Protocol(Service):
                     type=HopMessage.STATUS,
                     status=status,
                     reservation=Reservation(
-                        expire=int(time.time() + ttl),
+                        expire=int(reservation.expires_at),
                         addrs=[addr.to_bytes() for addr in self.host.get_addrs()],
-                        voucher=b"",  # We don't use vouchers yet
-                        signature=b"",  # We don't use signatures yet
+                        voucher=reservation.voucher,
+                        signature=b"",  # Signature envelopes are not implemented yet
                     ),
                     limit=Limit(
                         duration=self.limits.duration,

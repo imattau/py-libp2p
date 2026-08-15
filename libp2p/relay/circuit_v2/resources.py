@@ -230,12 +230,12 @@ class RelayResourceManager:
             True if the reservation is valid
 
         """
-        # TODO: Implement voucher and signature verification
         reservation = self._reservations.get(peer_id)
         return (
             reservation is not None
             and not reservation.is_expired()
-            and reservation.expires_at == proto_res.expire
+            and int(reservation.expires_at) == proto_res.expire
+            and (not proto_res.voucher or proto_res.voucher == reservation.voucher)
         )
 
     def can_accept_connection(self, peer_id: ID) -> bool:
