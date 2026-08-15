@@ -26,6 +26,9 @@ from libp2p.relay.circuit_v2.discovery import (
     RelayDiscovery,
     RelayInfo,
 )
+from libp2p.relay.circuit_v2.framing import (
+    encode_message,
+)
 from libp2p.relay.circuit_v2.pb.circuit_pb2 import (
     HopMessage,
     Status,
@@ -138,12 +141,12 @@ async def test_circuit_v2_transport_separates_reservation_and_connect_streams():
         transport = CircuitV2Transport(client_host, protocol, RelayConfig())
         reservation_stream = AsyncMock()
         circuit_stream = AsyncMock()
-        status = HopMessage(
+        status = encode_message(HopMessage(
             type=HopMessage.STATUS,
             status=Status(code=Status.OK),
-        ).SerializeToString()
-        reservation_stream.read.return_value = status
-        circuit_stream.read.return_value = status
+        ).SerializeToString())
+        reservation_stream.read.side_effect = [status[:1], status[1:]]
+        circuit_stream.read.side_effect = [status[:1], status[1:]]
 
         with patch.object(
             client_host,

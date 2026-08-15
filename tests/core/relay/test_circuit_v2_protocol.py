@@ -15,6 +15,10 @@ from libp2p.network.stream.exceptions import (
 from libp2p.peer.id import (
     ID,
 )
+from libp2p.relay.circuit_v2.framing import (
+    encode_message,
+    read_message,
+)
 from libp2p.relay.circuit_v2.pb import circuit_pb2 as proto
 from libp2p.relay.circuit_v2.protocol import (
     DEFAULT_RELAY_LIMITS,
@@ -27,9 +31,6 @@ from libp2p.relay.circuit_v2.resources import (
 )
 from libp2p.tools.async_service import (
     background_trio_service,
-)
-from libp2p.tools.constants import (
-    MAX_READ_LEN,
 )
 from libp2p.tools.utils import (
     connect,
@@ -66,7 +67,7 @@ async def assert_stream_response(
 
                 # Try to read response
                 logger.debug("Attempt %d: Reading response from stream", attempt + 1)
-                response_bytes = await stream.read(MAX_READ_LEN)
+                response_bytes = await read_message(stream)
 
                 # Check if we got any data
                 if not response_bytes:
@@ -328,7 +329,7 @@ async def test_circuit_v2_reservation_basic():
             # Read the request
             logger.info("Mock handler received stream request")
             try:
-                request_data = await stream.read(MAX_READ_LEN)
+                request_data = await read_message(stream)
                 request = proto.HopMessage()
                 request.ParseFromString(request_data)
                 logger.info("Mock handler parsed request: type=%s", request.type)
@@ -355,7 +356,7 @@ async def test_circuit_v2_reservation_basic():
 
                     # Send the response
                     logger.info("Mock handler sending response")
-                    await stream.write(response.SerializeToString())
+                    await stream.write(encode_message(response.SerializeToString()))
                     logger.info("Mock handler sent response")
 
                     # Keep stream open for client to read response
@@ -400,7 +401,7 @@ async def test_circuit_v2_reservation_basic():
                 )
 
                 logger.info("Sending reservation request")
-                await stream.write(request.SerializeToString())
+                await stream.write(encode_message(request.SerializeToString()))
                 logger.info("Reservation request sent")
 
                 # Wait to ensure the request is processed
@@ -408,7 +409,7 @@ async def test_circuit_v2_reservation_basic():
 
                 # Read response directly
                 logger.info("Reading response directly")
-                response_bytes = await stream.read(MAX_READ_LEN)
+                response_bytes = await read_message(stream)
                 assert response_bytes, "No response received"
 
                 # Parse response
@@ -462,7 +463,7 @@ async def test_circuit_v2_reservation_limit():
             # Read the request
             logger.info("Mock handler received stream request")
             try:
-                request_data = await stream.read(MAX_READ_LEN)
+                request_data = await read_message(stream)
                 request = proto.HopMessage()
                 request.ParseFromString(request_data)
                 logger.info("Mock handler parsed request: type=%s", request.type)
@@ -520,7 +521,7 @@ async def test_circuit_v2_reservation_limit():
 
                     # Send the response
                     logger.info("Mock handler sending response")
-                    await stream.write(response.SerializeToString())
+                    await stream.write(encode_message(response.SerializeToString()))
                     logger.info("Mock handler sent response")
 
                     # Keep stream open for client to read response
@@ -571,7 +572,7 @@ async def test_circuit_v2_reservation_limit():
                 )
 
                 logger.info("Sending reservation request for client1")
-                await stream1.write(request1.SerializeToString())
+                await stream1.write(encode_message(request1.SerializeToString()))
                 logger.info("Sent reservation request for client1")
 
                 # Wait to ensure the request is processed
@@ -579,7 +580,7 @@ async def test_circuit_v2_reservation_limit():
 
                 # Read response directly
                 logger.info("Reading response for client1")
-                response_bytes = await stream1.read(MAX_READ_LEN)
+                response_bytes = await read_message(stream1)
                 assert response_bytes, "No response received for client1"
 
                 # Parse response
@@ -628,7 +629,7 @@ async def test_circuit_v2_reservation_limit():
                 )
 
                 logger.info("Sending reservation request for client2")
-                await stream2.write(request2.SerializeToString())
+                await stream2.write(encode_message(request2.SerializeToString()))
                 logger.info("Sent reservation request for client2")
 
                 # Wait to ensure the request is processed
@@ -636,7 +637,7 @@ async def test_circuit_v2_reservation_limit():
 
                 # Read response directly
                 logger.info("Reading response for client2")
-                response_bytes = await stream2.read(MAX_READ_LEN)
+                response_bytes = await read_message(stream2)
                 assert response_bytes, "No response received for client2"
 
                 # Parse response
