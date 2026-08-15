@@ -185,9 +185,13 @@ P5 — Routing & storage
     *Effort: high. Risk: medium. Depends on: interop harness (P7).*
 
 18. **Content routing + delegated routing.**
-    Expose the content-routing interface (put/get providers) backed by the DHT, plus a
-    delegated (HTTP) client.
-    *Effort: medium. Risk: low. Depends on: 15.*
+    The native Kademlia adapter now exposes provider advertisement and lookup through
+    the content-routing interface. ``libp2p.routing`` also provides a dependency-free
+    Delegated Routing V1 HTTP client with JSON and NDJSON response support, provider
+    limits, and peer-record decoding.
+    *Status: native implementation complete for the current scope; interop and live
+    delegated-service validation pending in P7. Effort remaining: low. Risk: low.
+    Depends on: 15.*
 
 19. **Records (IPNS / ``libp2p-record``).**
     Implement the IPNS record validator and record store used by the DHT.
