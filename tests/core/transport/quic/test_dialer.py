@@ -29,7 +29,11 @@ async def test_dialer_completes_localhost_quic_handshake():
         address = listener.get_addrs()[0]
         port = int(address.value_for_protocol("udp"))
         client = await QuicDialer().dial(
-            "127.0.0.1", port, client_key_pair, nursery
+            "127.0.0.1",
+            port,
+            client_key_pair,
+            nursery,
+            expected_peer_id=ID.from_pubkey(server_key_pair.public_key),
         )
         await server_ready.wait()
         assert client.connection.configuration.is_client

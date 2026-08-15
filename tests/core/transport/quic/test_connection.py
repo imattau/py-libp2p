@@ -1,4 +1,6 @@
+import pytest
 from cryptography import x509
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import Encoding
 
@@ -9,6 +11,7 @@ from libp2p.transport.quic.connection import (
     LIBP2P_TLS_HANDSHAKE_PREFIX,
     create_libp2p_certificate,
     create_quic_connection,
+    peer_id_from_certificate,
 )
 
 
@@ -65,3 +68,31 @@ def test_create_quic_connection_configures_identity():
     assert connection.configuration.max_datagram_size == 1400
     assert isinstance(connection.configuration.certificate, x509.Certificate)
     assert connection.configuration.private_key is not None
+
+
+def test_peer_id_from_certificate_rejects_tampered_signature():
+    certificate, certificate_key = create_libp2p_certificate(
+        create_new_key_pair(seed=b"t" * 32)
+    )
+    extension = certificate.extensions.get_extension_for_oid(
+        LIBP2P_PUBLIC_KEY_EXTENSION
+    )
+    tampered = bytearray(extension.value.value)
+    tampered[-1] ^= 1
+    builder = (
+        x509.CertificateBuilder()
+        .subject_name(certificate.subject)
+        .issuer_name(certificate.issuer)
+        .public_key(certificate.public_key())
+        .serial_number(certificate.serial_number)
+        .not_valid_before(certificate.not_valid_before_utc)
+        .not_valid_after(certificate.not_valid_after_utc)
+        .add_extension(
+            x509.UnrecognizedExtension(LIBP2P_PUBLIC_KEY_EXTENSION, bytes(tampered)),
+            critical=True,
+        )
+    )
+    tampered_certificate = builder.sign(certificate_key, hashes.SHA256())
+
+    with pytest.raises(ValueError, match="identity signature"):
+        peer_id_from_certificate(tampered_certificate)

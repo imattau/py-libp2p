@@ -20,6 +20,8 @@ class QuicDatagramSocket(Protocol):
 
     async def sendto(self, data: bytes, addr: Any) -> None: ...
 
+    async def aclose(self) -> None: ...
+
 
 class QuicTrioDriver:
     """Drive one sans-I/O QUIC connection with a Trio datagram socket."""

@@ -31,6 +31,8 @@ class QuicConnectionAdapter:
         self._external_flush_output = flush_output
         self._incoming_send, self._incoming_receive = trio.open_memory_channel(100)
         self._driver: QuicTrioDriver | None = None
+        self._run_scope: trio.CancelScope | None = None
+        self._socket: QuicDatagramSocket | None = None
         self._handshake_complete = trio.Event()
         self._closed = trio.Event()
         self.remote_peer_id = None
@@ -46,13 +48,16 @@ class QuicConnectionAdapter:
         socket: QuicDatagramSocket,
         config: QuicTransportConfig | None = None,
     ) -> None:
+        self._socket = socket
+        self._run_scope = trio.CancelScope()
         self._driver = QuicTrioDriver(
             self.connection,
             socket,
             self._handle_event,
             config,
         )
-        await self._driver.run()
+        with self._run_scope:
+            await self._driver.run()
 
     async def open_stream(self) -> QuicStream:
         return await self._manager.open_stream()
@@ -64,6 +69,10 @@ class QuicConnectionAdapter:
         await self._handshake_complete.wait()
 
     async def close(self) -> None:
+        if self._run_scope is not None:
+            self._run_scope.cancel()
+        if self._socket is not None:
+            await self._socket.aclose()
         self._closed.set()
 
     def _handle_event(self, event: object) -> None:
