@@ -220,7 +220,6 @@ class AutoNATService:
             self.peerstore.add_addrs(peer_id, addresses, 60_000)
         async with self._dial_limiter:
             success = await self._try_dial(peer_id)
-        self.dial_results[peer_id] = success
         response.dialResponse.status = Message.OK if success else Message.E_DIAL_ERROR
         if success and addresses:
             response.dialResponse.addr = addresses[0].to_bytes()

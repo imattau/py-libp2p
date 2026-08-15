@@ -291,6 +291,7 @@ async def test_handle_dial():
             assert response.type == Message.DIAL_RESPONSE
             assert response.dialResponse.status == Message.OK
             mock_try_dial.assert_called_once_with(peer_id)
+            assert service.dial_results == {}
 
 
 @pytest.mark.trio
