@@ -98,6 +98,7 @@ class BasicHost(IHost):
         default_protocols: Optional["OrderedDict[TProtocol, StreamHandlerFn]"] = None,
         conn_manager: INotifee | None = None,
         negotitate_timeout: int = DEFAULT_NEGOTIATE_TIMEOUT,
+        enable_autonat: bool = False,
     ) -> None:
         self._network = network
         self._network.set_stream_handler(self._swarm_stream_handler)
@@ -107,6 +108,10 @@ class BasicHost(IHost):
         default_protocols = default_protocols or get_default_protocols(self)
         self.multiselect = Multiselect(dict(default_protocols.items()))
         self.multiselect_client = MultiselectClient()
+        if enable_autonat:
+            from libp2p.host.autonat.autonat import AutoNATService
+
+            self.autonat = AutoNATService(self)
         if enable_mDNS:
             self.mDNS = MDNSDiscovery(network)
         if bootstrap:

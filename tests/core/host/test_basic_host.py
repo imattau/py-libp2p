@@ -1,9 +1,14 @@
 from libp2p import (
+    new_host,
     new_swarm,
 )
 from libp2p.crypto.rsa import (
     create_new_key_pair,
 )
+from libp2p.host.autonat import (
+    AutoNATService,
+)
+from libp2p.host.autonat.autonat import AUTONAT_PROTOCOL_ID
 from libp2p.host.basic_host import (
     BasicHost,
 )
@@ -22,3 +27,10 @@ def test_default_protocols():
     # NOTE: comparing keys for equality as handlers may be closures that do not compare
     # in the way this test is concerned with
     assert handlers.keys() == get_default_protocols(host).keys()
+
+
+def test_new_host_can_enable_autonat():
+    host = new_host(enable_autonat=True)
+
+    assert isinstance(host.autonat, AutoNATService)
+    assert AUTONAT_PROTOCOL_ID in host.get_mux().handlers

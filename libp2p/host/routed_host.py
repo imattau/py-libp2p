@@ -26,12 +26,14 @@ class RoutedHost(BasicHost):
         enable_mDNS: bool = False,
         bootstrap: list[str] | None = None,
         conn_manager: INotifee | None = None,
+        enable_autonat: bool = False,
     ):
         super().__init__(
             network,
             enable_mDNS=enable_mDNS,
             bootstrap=bootstrap,
             conn_manager=conn_manager,
+            enable_autonat=enable_autonat,
         )
         self._router = router
 
