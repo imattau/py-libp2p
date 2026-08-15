@@ -10,6 +10,7 @@ from .connection import (
     create_libp2p_certificate,
     create_quic_connection,
 )
+from .connection_adapter import QuicConnectionAdapter
 from .driver import QuicTrioDriver
 from .events import (
     QuicConnectionClosed,
@@ -32,4 +33,5 @@ __all__ = (
     "QuicStreamManager",
     "create_libp2p_certificate",
     "create_quic_connection",
+    "QuicConnectionAdapter",
 )
