@@ -659,7 +659,7 @@ class CircuitV2Protocol(Service):
                     # Send error response
                     await self._send_status(
                         stream,
-                        StatusCode.INTERNAL_ERROR,
+                        StatusCode.RESERVATION_REFUSED,
                         f"Failed to process reservation: {str(e)}",
                     )
                 except Exception as send_err:

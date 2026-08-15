@@ -26,7 +26,6 @@ class StatusCode(IntEnum):
     NO_RESERVATION = 204
     MALFORMED_MESSAGE = 400
     UNEXPECTED_MESSAGE = 401
-    INTERNAL_ERROR = 500
 
 
 def create_status(code: int = StatusCode.OK, message: str = "") -> Any:
