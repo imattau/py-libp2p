@@ -35,8 +35,8 @@ ______________________________________________________________________
 | **`libp2p-tcp`**                       |     ✅     | [source](https://github.com/libp2p/py-libp2p/blob/main/libp2p/transport/tcp/tcp.py) |
 | **`libp2p-quic`**                      |     🛠️     | [source](https://github.com/libp2p/py-libp2p/tree/main/libp2p/transport/quic)       |
 | **`libp2p-websocket`**                 |     🛠️     | [source](https://github.com/libp2p/py-libp2p/tree/main/libp2p/transport/websocket) |
-| **`libp2p-webrtc-browser-to-server`**  |     ❌     |                                                                                     |
-| **`libp2p-webrtc-private-to-private`** |     ❌     |                                                                                     |
+| **`libp2p-webrtc-browser-to-server`**  |     🛠️     | [foundation](https://github.com/libp2p/py-libp2p/tree/main/libp2p/transport/webrtc) |
+| **`libp2p-webrtc-private-to-private`** |     🛠️     | [foundation](https://github.com/libp2p/py-libp2p/tree/main/libp2p/transport/webrtc) |
 | **`libp2p-webtransport`**              |     ❌     |                                                                                     |
 
 ______________________________________________________________________
@@ -45,7 +45,7 @@ ______________________________________________________________________
 
 | **NAT Traversal**             | **Status** |
 | ----------------------------- | :--------: |
-| **`libp2p-circuit-relay-v2`** |     🌱     |
+| **`libp2p-circuit-relay-v2`** |     🛠️     |
 | **`libp2p-autonat`**          |     🛠️     |
 | **`libp2p-hole-punching`**    |     🛠️     |
 | **`libp2p-dcutr`**            |     🛠️     |
@@ -66,9 +66,9 @@ ______________________________________________________________________
 | **Discovery**        | **Status** |
 | -------------------- | :--------: |
 | **`bootstrap`**      |     ✅     |
-| **`random-walk`**    |     ❌     |
+| **`random-walk`**    |     🛠️     |
 | **`mdns-discovery`** |     ✅     |
-| **`rendezvous`**     |     ❌     |
+| **`rendezvous`**     |     🛠️     |
 
 ______________________________________________________________________
 
@@ -110,8 +110,8 @@ ______________________________________________________________________
 
 | **Management**                 | **Status** |
 | ------------------------------ | :--------: |
-| **`connection-manager`**       |     ❌     |
-| **`resource-manager`**         |     ❌     |
+| **`connection-manager`**       |     🛠️     |
+| **`resource-manager`**         |     🛠️     |
 
 ______________________________________________________________________
 
@@ -119,7 +119,7 @@ ______________________________________________________________________
 
 | **Storage**         | **Status** |
 | ------------------- | :--------: |
-| **`libp2p-record`** |     ❌     |
+| **`libp2p-record`** |     🛠️     |
 
 ______________________________________________________________________
 
@@ -127,8 +127,8 @@ ______________________________________________________________________
 
 | **Observability** | **Status** |
 | ----------------- | :--------: |
-| **`event-bus`**   |     🌱     |
-| **`metrics`**     |     ❌     |
+| **`event-bus`**   |     🛠️     |
+| **`metrics`**     |     🛠️     |
 
 ______________________________________________________________________
 
@@ -140,6 +140,23 @@ ______________________________________________________________________
 | **`libp2p-peer`**      |     ✅     |             [source](https://github.com/libp2p/py-libp2p/tree/main/libp2p/peer)              |
 | **`libp2p-identify`**  |     ✅     | [source](https://github.com/libp2p/py-libp2p/blob/main/libp2p/identity/identify/identify.py) |
 | **`libp2p-identify-push`** |  ✅  | [source](https://github.com/libp2p/py-libp2p/blob/main/libp2p/identity/identify_push/identify_push.py) |
+
+______________________________________________________________________
+
+### Coverage Notes
+
+The statuses above describe native implementation coverage in the current Trio
+runtime. QUIC, WebSocket, security, AutoNAT, relay-v2, hole punching/DCUtR,
+discovery, routing, connection/resource management, metrics, and IPNS validation
+have native implementations with focused tests. WebRTC currently covers shared
+framing, data-channel adaptation, Direct address validation, and the optional
+aiortc engine boundary; its signaling and full transport integration remain in
+progress. WebTransport is not implemented.
+
+Cross-implementation validation and production hardening remain a later phase.
+Remaining gaps include full WebRTC signaling, WebTransport, Kademlia interop and
+completeness, IPNS DHT integration and RSA compatibility, multi-connection
+connection-manager parity, and broader Go, JavaScript, and CI interoperability.
 
 ______________________________________________________________________
 
