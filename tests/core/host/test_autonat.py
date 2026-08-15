@@ -110,11 +110,17 @@ async def test_update_status_expires_old_probe_results():
         service._dial_result_times = {
             peer_id: time.time() - AUTONAT_RESULT_TTL - 1 for peer_id in peer_ids
         }
+        observed_addr = Multiaddr("/ip4/203.0.113.10/tcp/4001")
+        service.observed_addrs.add(observed_addr)
+        service._observed_addr_times[observed_addr] = (
+            time.time() - AUTONAT_RESULT_TTL - 1
+        )
 
         service.update_status()
 
         assert service.status == AutoNATStatus.UNKNOWN
         assert service.dial_results == {}
+        assert service.observed_addrs == set()
 
 
 @pytest.mark.trio

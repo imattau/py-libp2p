@@ -87,6 +87,7 @@ class AutoNATService:
         self.dial_results: dict[ID, bool] = {}
         self._dial_result_times: dict[ID, float] = {}
         self.observed_addrs: set[Multiaddr] = set()
+        self._observed_addr_times: dict[Multiaddr, float] = {}
         self._dial_limiter = trio.CapacityLimiter(MAX_CONCURRENT_DIALS)
         host.set_stream_handler(AUTONAT_PROTOCOL_ID, self.handle_stream)
 
@@ -322,6 +323,7 @@ class AutoNATService:
                         logger.debug("Ignoring invalid AutoNAT observed address")
                     else:
                         self.observed_addrs.add(observed_addr)
+                        self._observed_addr_times[observed_addr] = time.time()
                         self.peerstore.add_addrs(
                             self.host.get_id(), [observed_addr], 60_000
                         )
@@ -379,6 +381,10 @@ class AutoNATService:
             if now - result_time > AUTONAT_RESULT_TTL:
                 self._dial_result_times.pop(peer_id, None)
                 self.dial_results.pop(peer_id, None)
+        for address, observed_time in list(self._observed_addr_times.items()):
+            if now - observed_time > AUTONAT_RESULT_TTL:
+                self._observed_addr_times.pop(address, None)
+                self.observed_addrs.discard(address)
 
         if not self.dial_results:
             self.status = AutoNATStatus.UNKNOWN
