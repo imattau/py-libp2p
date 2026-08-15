@@ -17,9 +17,15 @@ class WebSocketLike(Protocol):
 class WebSocketConnection(IRawConnection):
     """Adapt binary WebSocket messages to libp2p's byte-stream contract."""
 
-    def __init__(self, websocket: WebSocketLike, is_initiator: bool) -> None:
+    def __init__(
+        self,
+        websocket: WebSocketLike,
+        is_initiator: bool,
+        context_manager: object | None = None,
+    ) -> None:
         self.websocket = websocket
         self.is_initiator = is_initiator
+        self._context_manager = context_manager
         self._buffer: deque[bytes] = deque()
         self._closed = False
 
@@ -51,7 +57,10 @@ class WebSocketConnection(IRawConnection):
     async def close(self) -> None:
         if not self._closed:
             self._closed = True
-            await self.websocket.aclose()
+            if self._context_manager is not None:
+                await self._context_manager.__aexit__(None, None, None)
+            else:
+                await self.websocket.aclose()
 
     def get_remote_address(self) -> tuple[str, int] | None:
         return None

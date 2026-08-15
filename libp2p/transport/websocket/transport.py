@@ -65,6 +65,7 @@ class WebSocketListener(IListener):
             )
 
         self._server = await nursery.start(serve)
+        self._port = self._server.port
         return self._server is not None
 
     def get_addrs(self) -> tuple[Multiaddr, ...]:
@@ -75,7 +76,8 @@ class WebSocketListener(IListener):
 
     async def close(self) -> None:
         if self._server is not None:
-            self._server.close()
+            for listener in self._server._listeners:
+                await listener.aclose()
             self._server = None
 
 
@@ -85,15 +87,16 @@ class WebSocket(ITransport):
         scheme = "wss" if secure else "ws"
         ssl_context = _client_ssl_context(maddr) if secure else None
         try:
-            websocket = await open_websocket_url(
+            context_manager = open_websocket_url(
                 f"{scheme}://{host}:{port}/",
                 ssl_context=ssl_context,
-            ).__aenter__()
+            )
+            websocket = await context_manager.__aenter__()
         except Exception as error:
             raise OpenConnectionError(
                 f"Failed to open WebSocket to {maddr}: {error}"
             ) from error
-        return WebSocketConnection(websocket, True)
+        return WebSocketConnection(websocket, True, context_manager)
 
     def create_listener(self, handler_function: THandler) -> WebSocketListener:
         return WebSocketListener(handler_function)

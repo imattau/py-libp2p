@@ -1,6 +1,9 @@
 import pytest
+from multiaddr import Multiaddr
+import trio
 
 from libp2p.transport.websocket.connection import WebSocketConnection
+from libp2p.transport.websocket.transport import WebSocket, WebSocketListener
 
 
 class FakeWebSocket:
@@ -39,3 +42,28 @@ async def test_websocket_connection_rejects_text_messages():
 
     with pytest.raises(ValueError, match="binary"):
         await connection.read()
+
+
+@pytest.mark.trio
+async def test_websocket_transport_round_trip_over_loopback():
+    received = trio.Event()
+
+    async def handle_server_connection(connection):
+        assert await connection.read() == b"request"
+        await connection.write(b"response")
+        received.set()
+        await connection.close()
+
+    listener = WebSocketListener(handle_server_connection)
+    transport = WebSocket()
+    async with trio.open_nursery() as nursery:
+        assert await listener.listen(
+            Multiaddr("/ip4/127.0.0.1/tcp/0/ws"), nursery
+        )
+        connection = await transport.dial(listener.get_addrs()[0])
+        await connection.write(b"request")
+        assert await connection.read() == b"response"
+        await received.wait()
+        await connection.close()
+        nursery.cancel_scope.cancel()
+    await listener.close()
