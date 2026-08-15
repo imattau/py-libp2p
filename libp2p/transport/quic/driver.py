@@ -12,6 +12,7 @@ from .backend import (
     flush_datagrams,
 )
 from .config import QuicTransportConfig
+from .events import normalize_event
 
 
 class QuicDatagramSocket(Protocol):
@@ -59,7 +60,10 @@ class QuicTrioDriver:
             await self._process_backend()
 
     async def _process_backend(self) -> None:
-        drain_events(self.connection, self.handle_event)
+        drain_events(
+            self.connection,
+            lambda event: self.handle_event(normalize_event(event)),
+        )
         await flush_datagrams(
             self.connection,
             self.socket.sendto,
