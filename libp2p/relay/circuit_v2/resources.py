@@ -229,6 +229,7 @@ class RelayResourceManager:
             True if the reservation is valid
 
         """
+        self._clean_expired()
         reservation = self._reservations.get(peer_id)
         return (
             reservation is not None
@@ -295,6 +296,8 @@ class RelayResourceManager:
             The TTL of the reservation in seconds
 
         """
+        self._clean_expired()
+
         # Check for existing reservation
         existing = self._reservations.get(peer_id)
         if existing and not existing.is_expired():
