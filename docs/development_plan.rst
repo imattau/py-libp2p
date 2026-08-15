@@ -123,8 +123,11 @@ dependency.
    then retain the normal libp2p security and muxer upgrade path above the raw
    transport. Initial acceptance covers ``/ws`` and ``/wss`` multiaddrs, listener
    and dialer lifecycle, binary framing, and close/EOF behavior; browser and Go
-   interoperability remain P7 validation work.
-   *Status: next P2 implementation slice. Effort: medium. Risk: medium.*
+   interoperability remain P7 validation work. The native Trio implementation now
+   covers those transport and swarm integration requirements with explicit TLS
+   context configuration for ``wss``.
+   *Status: native implementation complete for the current scope; interop and
+   production hardening pending. Effort remaining: medium. Risk: medium.*
 
 P3 — NAT traversal
 ~~~~~~~~~~~~~~~~~~
