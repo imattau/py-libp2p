@@ -2,12 +2,14 @@
 
 import logging
 import time
+from unittest.mock import AsyncMock
 
 import pytest
 import trio
 
 from libp2p.relay.circuit_v2.discovery import (
     RelayDiscovery,
+    RelayInfo,
 )
 from libp2p.relay.circuit_v2.framing import (
     encode_message,
@@ -36,6 +38,30 @@ STREAM_TIMEOUT = 15  # seconds
 HANDLER_TIMEOUT = 15  # seconds
 SLEEP_TIME = 1.0  # seconds
 DISCOVERY_TIMEOUT = 20  # seconds
+
+
+@pytest.mark.trio
+async def test_discovery_eviction_closes_reservation_stream():
+    async with HostFactory.create_batch_and_listen(3) as hosts:
+        host, old_relay, current_relay = hosts
+        discovery = RelayDiscovery(host, max_relays=1)
+        old_stream = AsyncMock()
+        discovery._discovered_relays[old_relay.get_id()] = RelayInfo(
+            peer_id=old_relay.get_id(),
+            discovered_at=1,
+            last_seen=1,
+            reservation_stream=old_stream,
+        )
+        discovery._discovered_relays[current_relay.get_id()] = RelayInfo(
+            peer_id=current_relay.get_id(),
+            discovered_at=2,
+            last_seen=2,
+        )
+
+        await discovery.discover_relays()
+
+        assert old_relay.get_id() not in discovery._discovered_relays
+        old_stream.close.assert_awaited_once()
 
 
 # Make a simple stream handler for testing

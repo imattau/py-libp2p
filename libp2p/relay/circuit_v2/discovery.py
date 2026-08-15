@@ -196,7 +196,9 @@ class RelayDiscovery(Service):
                     reverse=True,
                 )
                 to_remove = sorted_relays[self.max_relays :]
-                for peer_id, _ in to_remove:
+                for peer_id, relay_info in to_remove:
+                    if relay_info.reservation_stream is not None:
+                        await relay_info.reservation_stream.close()
                     del self._discovered_relays[peer_id]
 
             logger.debug(
