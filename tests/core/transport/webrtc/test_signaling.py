@@ -7,6 +7,8 @@ from libp2p.transport.webrtc.signaling import (
     WebRTCSignalingMessage,
     WebRTCSignalingType,
     encode_ice_candidate,
+    ice_candidate_from_json,
+    ice_candidate_to_json,
     munge_direct_sdp,
     new_direct_credentials,
     noise_prologue,
@@ -89,6 +91,31 @@ def test_ice_candidate_is_compact_deterministic_json() -> None:
 
     assert message.type is WebRTCSignalingType.ICE_CANDIDATE
     assert message.data == '{"candidate":"abc","sdpMid":"0"}'
+
+
+def test_ice_candidate_serialization_supports_aiortc_like_objects() -> None:
+    class Candidate:
+        candidate = "candidate:1"
+        sdpMid = "0"
+        sdpMLineIndex = 0
+        usernameFragment = "fragment"
+
+    message = encode_ice_candidate(Candidate())
+
+    assert ice_candidate_from_json(message.data) == {
+        "candidate": "candidate:1",
+        "sdpMid": "0",
+        "sdpMLineIndex": 0,
+        "usernameFragment": "fragment",
+    }
+    assert ice_candidate_to_json(None) == {"candidate": ""}
+
+
+def test_ice_candidate_json_rejects_malformed_payloads() -> None:
+    with pytest.raises(ValueError, match="valid JSON"):
+        ice_candidate_from_json("not-json")
+    with pytest.raises(ValueError, match="candidate"):
+        ice_candidate_from_json("{}")
 
 
 @pytest.mark.parametrize("description_type", ["offer", "answer"])

@@ -115,6 +115,13 @@ class AiortcWebRTCEngine:
         peer_connection = self._require_peer_connection()
         await self.bridge.call(_register_data_channel_handler, peer_connection, handler)
 
+    async def on_ice_candidate(self, handler: Any) -> None:
+        """Register a callback for local trickle ICE candidates."""
+        peer_connection = self._require_peer_connection()
+        await self.bridge.call(
+            _register_ice_candidate_handler, peer_connection, handler
+        )
+
     async def close(self) -> None:
         if self._peer_connection is not None:
             await self.bridge.call(self._peer_connection.close)
@@ -194,3 +201,7 @@ def _register_message_handler(channel: Any, handler: Any) -> None:
 
 def _register_data_channel_handler(peer_connection: Any, handler: Any) -> None:
     peer_connection.on("datachannel", handler)
+
+
+def _register_ice_candidate_handler(peer_connection: Any, handler: Any) -> None:
+    peer_connection.on("icecandidate", handler)

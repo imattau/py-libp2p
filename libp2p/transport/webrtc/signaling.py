@@ -132,8 +132,43 @@ def encode_ice_candidate(candidate: object) -> WebRTCSignalingMessage:
     """Encode an aiortc/browser ICE candidate JSON object for signaling."""
     return WebRTCSignalingMessage(
         WebRTCSignalingType.ICE_CANDIDATE,
-        json.dumps(candidate, separators=(",", ":"), sort_keys=True),
+        json.dumps(
+            ice_candidate_to_json(candidate), separators=(",", ":"), sort_keys=True
+        ),
     )
+
+
+def ice_candidate_to_json(candidate: object) -> dict[str, object]:
+    """Return the portable JSON fields used by browser and aiortc candidates."""
+    if candidate is None:
+        return {"candidate": ""}
+    if isinstance(candidate, dict):
+        return dict(candidate)
+    fields = (
+        "candidate",
+        "sdpMid",
+        "sdpMLineIndex",
+        "usernameFragment",
+    )
+    result = {
+        field: value
+        for field in fields
+        if (value := getattr(candidate, field, None)) is not None
+    }
+    if "candidate" not in result:
+        raise ValueError("ICE candidate is missing its candidate attribute")
+    return result
+
+
+def ice_candidate_from_json(data: str) -> dict[str, object]:
+    """Parse and validate an ICE candidate JSON signaling payload."""
+    try:
+        candidate = json.loads(data)
+    except json.JSONDecodeError as error:
+        raise ValueError("ICE candidate data is not valid JSON") from error
+    if not isinstance(candidate, dict) or "candidate" not in candidate:
+        raise ValueError("ICE candidate JSON must be an object with candidate")
+    return candidate
 
 
 async def read_signaling_message(stream: INetStream) -> WebRTCSignalingMessage:
