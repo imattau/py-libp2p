@@ -57,7 +57,7 @@ ______________________________________________________________________
 | **Secure Communication** | **Status** |                                  **Source**                                   |
 | ------------------------ | :--------: | :---------------------------------------------------------------------------: |
 | **`libp2p-noise`**       |     🛠️     | [source](https://github.com/libp2p/py-libp2p/tree/main/libp2p/security/noise) |
-| **`libp2p-tls`**         |     ❌     |                                                                               |
+| **`libp2p-tls`**         |     🛠️     | [source](https://github.com/libp2p/py-libp2p/tree/main/libp2p/security/tls)  |
 
 ______________________________________________________________________
 

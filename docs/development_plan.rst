@@ -109,8 +109,12 @@ dependency.
 
 10. **TLS secure channel.**
    Implement ``libp2p-tls`` per the spec so Noise is not the only production security
-   option (WebRTC/WebTransport also require TLS certs).
-   *Effort: medium. Risk: low. Depends on: crypto/serialization completeness.*
+   option (WebRTC/WebTransport also require TLS certs). The implementation now
+   provides TLS 1.3 memory-BIO handshakes, libp2p certificate authentication,
+   peer-ID pinning, and swarm multistream negotiation. Interoperability validation
+   and production hardening remain pending.
+   *Status: native implementation complete for the current scope; interop pending.
+   Effort remaining: medium. Risk: medium.*
 
 11. **WebSocket transport.**
    Implement ``libp2p-websocket`` (ws/wss). Broadens reach to browser-hosted peers.
