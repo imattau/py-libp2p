@@ -155,7 +155,7 @@ async def test_provide_and_find_providers(dht_pair: tuple[KadDHT, KadDHT]):
 
     # Advertise the first node as a provider
     with trio.fail_after(TEST_TIMEOUT):
-        success = await dht_a.provide(content_id)
+        success = await dht_a.content_routing.provide(content_id)
         assert success, "Failed to advertise as provider"
 
     # Allow time for the provider record to propagate
@@ -163,7 +163,12 @@ async def test_provide_and_find_providers(dht_pair: tuple[KadDHT, KadDHT]):
 
     # Find providers using the second node
     with trio.fail_after(TEST_TIMEOUT):
-        providers = await dht_b.find_providers(content_id)
+        providers = [
+            provider
+            async for provider in dht_b.content_routing.find_provider_iter(
+                content_id
+            )
+        ]
 
     # Verify that we found the first node as a provider
     assert providers, "No providers found"

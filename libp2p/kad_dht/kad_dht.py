@@ -38,6 +38,7 @@ from .common import (
     PROTOCOL_ID,
     QUERY_TIMEOUT,
 )
+from .content_routing import KadContentRouting
 from .pb.kademlia_pb2 import (
     Message,
 )
@@ -105,6 +106,7 @@ class KadDHT(Service):
 
         # Initialize provider store with host and peer_routing references
         self.provider_store = ProviderStore(host=host, peer_routing=self.peer_routing)
+        self.content_routing = KadContentRouting(self)
 
         # Last time we republished provider records
         self._last_provider_republish = time.time()

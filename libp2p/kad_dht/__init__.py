@@ -5,6 +5,9 @@ This module provides a Distributed Hash Table (DHT) implementation
 based on the Kademlia protocol.
 """
 
+from .content_routing import (
+    KadContentRouting,
+)
 from .kad_dht import (
     KadDHT,
 )
@@ -23,6 +26,7 @@ from .value_store import (
 
 __all__ = [
     "KadDHT",
+    "KadContentRouting",
     "RoutingTable",
     "PeerRouting",
     "ValueStore",
