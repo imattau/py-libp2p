@@ -9,7 +9,11 @@ from cryptography.hazmat.primitives.serialization import (
 from cryptography.x509 import load_der_x509_certificate
 
 from libp2p.crypto.ed25519 import create_new_key_pair
-from libp2p.security.tls import TLS_PROTOCOL_ID, TLSIdentity
+from libp2p.security.tls import (
+    TLS_PROTOCOL_ID,
+    TLSIdentity,
+    create_tls_context,
+)
 from libp2p.security.tls.certificate import LIBP2P_CERTIFICATE_VALIDITY
 from libp2p.transport.quic.config import QuicTransportConfig
 from libp2p.transport.quic.connection import (
@@ -198,3 +202,10 @@ def test_tls_identity_exposes_protocol_and_certificate():
     assert identity.certificate_der
     assert identity.certificate_pem.startswith(b"-----BEGIN CERTIFICATE-----")
     assert identity.private_key_pem.startswith(b"-----BEGIN EC PRIVATE KEY-----")
+
+
+def test_tls_context_requires_tls_13_and_client_certificates():
+    identity = TLSIdentity.create(create_new_key_pair(seed=b"c" * 32))
+    context = create_tls_context(identity, is_server=True)
+
+    assert context.get_verify_mode() & 0x02
