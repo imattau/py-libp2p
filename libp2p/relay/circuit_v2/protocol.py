@@ -528,6 +528,7 @@ class CircuitV2Protocol(Service):
                     status=status,
                     reservation=Reservation(
                         expire=int(time.time() + ttl),
+                        addrs=[addr.to_bytes() for addr in self.host.get_addrs()],
                         voucher=b"",  # We don't use vouchers yet
                         signature=b"",  # We don't use signatures yet
                     ),
@@ -626,6 +627,10 @@ class CircuitV2Protocol(Service):
                         id=cast(INetStreamWithExtras, stream)
                         .get_remote_peer_id()
                         .to_bytes()
+                    ),
+                    limit=Limit(
+                        duration=self.limits.duration,
+                        data=self.limits.data,
                     ),
                 )
                 await dst_stream.write(stop_msg.SerializeToString())
