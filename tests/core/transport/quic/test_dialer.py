@@ -48,6 +48,25 @@ async def test_dialer_completes_localhost_quic_handshake():
 
 
 @pytest.mark.trio
+async def test_hole_punch_probe_sends_random_payload_until_stopped():
+    class Socket:
+        def __init__(self) -> None:
+            self.sent = []
+
+        async def sendto(self, data, address) -> None:
+            self.sent.append((data, address))
+            stop.set()
+
+    stop = trio.Event()
+    socket = Socket()
+    await QuicDialer._send_punch_packets(socket, ("127.0.0.1", 4001), stop)
+
+    assert len(socket.sent) == 1
+    assert socket.sent[0][1] == ("127.0.0.1", 4001)
+    assert len(socket.sent[0][0]) == 32
+
+
+@pytest.mark.trio
 async def test_dialer_rejects_mismatched_peer_id():
     server_key_pair = create_new_key_pair(seed=b"m" * 32)
     client_key_pair = create_new_key_pair(seed=b"n" * 32)
