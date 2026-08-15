@@ -8,6 +8,7 @@ from unittest.mock import (
 )
 
 import pytest
+from multiaddr import Multiaddr
 import trio
 
 from libp2p.custom_types import TProtocol
@@ -161,6 +162,31 @@ async def test_circuit_v2_transport_separates_reservation_and_connect_streams():
         reservation_stream.close.assert_not_awaited()
         assert reservation_stream.write.await_count == 1
         assert circuit_stream.write.await_count == 1
+
+
+@pytest.mark.trio
+async def test_circuit_v2_transport_parses_circuit_multiaddr():
+    async with HostFactory.create_batch_and_listen(3) as hosts:
+        client_host, relay_host, target_host = hosts
+        protocol = CircuitV2Protocol(client_host, DEFAULT_RELAY_LIMITS, allow_hop=False)
+        transport = CircuitV2Transport(client_host, protocol, RelayConfig())
+        circuit_addr = relay_host.get_addrs()[0].encapsulate(
+            Multiaddr(f"/p2p-circuit/p2p/{target_host.get_id()}")
+        )
+
+        with patch.object(
+            transport,
+            "dial_peer_info",
+            new_callable=AsyncMock,
+            return_value=object(),
+        ) as dial_peer_info:
+            result = await transport.dial(circuit_addr)
+
+        assert result is dial_peer_info.return_value
+        peer_info = dial_peer_info.call_args.args[0]
+        assert peer_info.peer_id == target_host.get_id()
+        assert dial_peer_info.call_args.kwargs["relay_peer_id"] == relay_host.get_id()
+        assert relay_host.get_id() in client_host.get_peerstore().peer_ids()
 
 
 @pytest.mark.trio

@@ -116,16 +116,37 @@ class CircuitV2Transport(ITransport):
             If the connection cannot be established
 
         """
-        # Extract peer ID from multiaddr - P_P2P code is 0x01A5 (421)
-        peer_id_str = maddr.value_for_protocol("p2p")
-        if not peer_id_str:
-            raise ConnectionError("Multiaddr does not contain peer ID")
+        parts = maddr.split()
+        circuit_index = next(
+            (
+                index
+                for index, part in enumerate(parts)
+                if any(protocol.name == "p2p-circuit" for protocol in part.protocols())
+            ),
+            None,
+        )
+        if circuit_index is None:
+            peer_id_str = maddr.value_for_protocol("p2p")
+            if not peer_id_str:
+                raise ConnectionError("Multiaddr does not contain peer ID")
+            peer_id = ID.from_base58(peer_id_str)
+            peer_info = PeerInfo(peer_id, [maddr])
+            return await self.dial_peer_info(peer_info)
 
-        peer_id = ID.from_base58(peer_id_str)
-        peer_info = PeerInfo(peer_id, [maddr])
+        if circuit_index == 0 or circuit_index + 1 >= len(parts):
+            raise ConnectionError("Invalid circuit relay multiaddr")
+        relay_addr = multiaddr.Multiaddr.join(*parts[:circuit_index])
+        relay_peer_id = ID.from_base58(
+            parts[circuit_index - 1].value_for_protocol("p2p")
+        )
+        target_peer_id = ID.from_base58(
+            parts[circuit_index + 1].value_for_protocol("p2p")
+        )
+        self.host.get_peerstore().add_addrs(relay_peer_id, [relay_addr], 60_000)
+        peer_info = PeerInfo(target_peer_id, [maddr])
 
         # Use the internal dial_peer_info method
-        return await self.dial_peer_info(peer_info)
+        return await self.dial_peer_info(peer_info, relay_peer_id=relay_peer_id)
 
     async def dial_peer_info(
         self,
