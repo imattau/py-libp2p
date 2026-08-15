@@ -194,8 +194,13 @@ P5 — Routing & storage
     Depends on: 15.*
 
 19. **Records (IPNS / ``libp2p-record``).**
-    Implement the IPNS record validator and record store used by the DHT.
-    *Effort: medium. Risk: low. Depends on: 15.*
+    The native implementation now validates signed IPNS V2 records, including
+    required DAG-CBOR fields, Ed25519-compatible libp2p public keys, expiry,
+    legacy-field consistency, and monotonic sequence storage. DHT integration,
+    RSA compatibility, and cross-implementation validation remain deferred to P7.
+    *Status: native validator and store complete for the current scope; DHT and
+    interop integration pending in P7. Effort remaining: medium. Risk: medium.
+    Depends on: 15.*
 
 P6 — Observability & polish
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
