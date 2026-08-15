@@ -1,3 +1,4 @@
+import time
 from unittest.mock import (
     AsyncMock,
     patch,
@@ -9,6 +10,7 @@ from multiaddr import Multiaddr
 from libp2p.host.autonat.autonat import (
     AUTONAT_MIN_RESPONSES,
     AUTONAT_PROTOCOL_ID,
+    AUTONAT_RESULT_TTL,
     AutoNATService,
     AutoNATStatus,
 )
@@ -97,6 +99,22 @@ async def test_update_status():
         }
         service.update_status()
         assert service.status == AutoNATStatus.PRIVATE
+
+
+@pytest.mark.trio
+async def test_update_status_expires_old_probe_results():
+    async with HostFactory.create_batch_and_listen(1) as hosts:
+        service = AutoNATService(hosts[0])
+        peer_ids = [ID(f"peer{i}".encode()) for i in range(AUTONAT_MIN_RESPONSES)]
+        service.dial_results = dict.fromkeys(peer_ids, True)
+        service._dial_result_times = {
+            peer_id: time.time() - AUTONAT_RESULT_TTL - 1 for peer_id in peer_ids
+        }
+
+        service.update_status()
+
+        assert service.status == AutoNATStatus.UNKNOWN
+        assert service.dial_results == {}
 
 
 @pytest.mark.trio
@@ -206,6 +224,30 @@ async def test_probe_many_records_independent_results():
         }
         assert service.dial_results[server_one.get_id()] is True
         assert service.dial_results[server_two.get_id()] is True
+
+
+@pytest.mark.trio
+async def test_probe_records_malformed_response_as_failure():
+    async with HostFactory.create_batch_and_listen(2) as hosts:
+        client, server = hosts
+        service = AutoNATService(client)
+        mock_stream = AsyncMock(spec=NetStream)
+        malformed = encode_varint_prefixed(b"not-a-protobuf")
+        mock_stream.read.side_effect = [malformed[:1], malformed[1:]]
+
+        with patch.object(
+            client,
+            "new_stream",
+            new_callable=AsyncMock,
+            return_value=mock_stream,
+        ):
+            result = await service.probe(
+                server.get_id(), [Multiaddr("/ip4/127.0.0.1/tcp/4001")]
+            )
+
+        assert result is False
+        assert service.dial_results[server.get_id()] is False
+        mock_stream.close.assert_awaited_once()
 
 
 @pytest.mark.trio

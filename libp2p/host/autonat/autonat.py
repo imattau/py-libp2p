@@ -1,5 +1,6 @@
 from collections.abc import Mapping, Sequence
 import logging
+import time
 
 from google.protobuf.message import (
     DecodeError,
@@ -36,6 +37,7 @@ AUTONAT_PROTOCOL_ID = TProtocol("/libp2p/autonat/1.0.0")
 AUTONAT_MIN_RESPONSES = 4
 MAX_AUTONAT_MESSAGE_SIZE = 4096
 MAX_CONCURRENT_DIALS = 4
+AUTONAT_RESULT_TTL = 3600
 
 logger = logging.getLogger("libp2p.host.autonat")
 
@@ -81,6 +83,7 @@ class AutoNATService:
         self.peerstore: IPeerStore = host.get_peerstore()
         self.status = AutoNATStatus.UNKNOWN
         self.dial_results: dict[ID, bool] = {}
+        self._dial_result_times: dict[ID, float] = {}
         self.observed_addrs: set[Multiaddr] = set()
         self._dial_limiter = trio.CapacityLimiter(MAX_CONCURRENT_DIALS)
         host.set_stream_handler(AUTONAT_PROTOCOL_ID, self.handle_stream)
@@ -280,7 +283,11 @@ class AutoNATService:
         try:
             await stream.write(encode_varint_prefixed(request.SerializeToString()))
             response = Message()
-            response.ParseFromString(await read_varint_prefixed_bytes(stream))
+            try:
+                response.ParseFromString(await read_varint_prefixed_bytes(stream))
+            except DecodeError:
+                self._record_probe_result(server_peer_id, False)
+                return False
             success = response.type == Message.DIAL_RESPONSE and (
                 response.dialResponse.status == Message.OK
             )
@@ -294,8 +301,7 @@ class AutoNATService:
                     self.peerstore.add_addrs(
                         self.host.get_id(), [observed_addr], 60_000
                     )
-            self.dial_results[server_peer_id] = success
-            self.update_status()
+            self._record_probe_result(server_peer_id, success)
             return success
         finally:
             await stream.close()
@@ -323,8 +329,7 @@ class AutoNATService:
                     server_peer_id,
                     exc_info=True,
                 )
-                self.dial_results[server_peer_id] = False
-                self.update_status()
+                self._record_probe_result(server_peer_id, False)
                 results[server_peer_id] = False
 
         async with trio.open_nursery() as nursery:
@@ -341,6 +346,12 @@ class AutoNATService:
         node is publicly reachable. The node is considered public or private
         only after more than three distinct peers report the same result.
         """
+        now = time.time()
+        for peer_id, result_time in list(self._dial_result_times.items()):
+            if now - result_time > AUTONAT_RESULT_TTL:
+                self._dial_result_times.pop(peer_id, None)
+                self.dial_results.pop(peer_id, None)
+
         if not self.dial_results:
             self.status = AutoNATStatus.UNKNOWN
             return
@@ -353,3 +364,9 @@ class AutoNATService:
             self.status = AutoNATStatus.PRIVATE
         else:
             self.status = AutoNATStatus.UNKNOWN
+
+    def _record_probe_result(self, peer_id: ID, success: bool) -> None:
+        """Record a probe result and refresh the derived reachability status."""
+        self.dial_results[peer_id] = success
+        self._dial_result_times[peer_id] = time.time()
+        self.update_status()
