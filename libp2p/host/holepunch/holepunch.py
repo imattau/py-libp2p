@@ -16,6 +16,7 @@ from libp2p.utils.varint import decode_uvarint_from_stream, encode_varint_prefix
 HOLEPUNCH_PROTOCOL_ID = TProtocol("/libp2p/dcutr")
 MAX_MESSAGE_SIZE = 4096
 MAX_ATTEMPTS = 3
+MAX_SYNC_DELAY = 5
 
 logger = logging.getLogger("libp2p.host.holepunch")
 
@@ -154,6 +155,7 @@ class HolePunchService:
         for attempt in range(MAX_ATTEMPTS):
             stream = await self.host.new_stream(peer_id, [HOLEPUNCH_PROTOCOL_ID])
             try:
+                started_at = trio.current_time()
                 await stream.write(
                     self._message(HolePunch.CONNECT, local_addresses)
                 )
@@ -167,6 +169,9 @@ class HolePunchService:
                     self.host.get_network(), "dial_peer_direct", None
                 )
                 if direct_addresses and dial_peer_direct is not None:
+                    await trio.sleep(
+                        min((trio.current_time() - started_at) / 2, MAX_SYNC_DELAY)
+                    )
                     await dial_peer_direct(peer_id, direct_addresses)
                 return remote_addresses
             except Exception as error:
