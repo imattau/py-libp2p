@@ -181,6 +181,34 @@ async def test_circuit_v2_transport_separates_reservation_and_connect_streams():
 
 
 @pytest.mark.trio
+async def test_circuit_v2_transport_prefers_live_reservation():
+    async with HostFactory.create_batch_and_listen(3) as hosts:
+        client_host, first_relay, second_relay = hosts
+        transport = CircuitV2Transport(
+            client_host,
+            CircuitV2Protocol(client_host, DEFAULT_RELAY_LIMITS, allow_hop=False),
+            RelayConfig(),
+        )
+        now = time.time()
+        transport.discovery._discovered_relays[first_relay.get_id()] = RelayInfo(
+            peer_id=first_relay.get_id(),
+            discovered_at=now - 10,
+            last_seen=now - 10,
+        )
+        transport.discovery._discovered_relays[second_relay.get_id()] = RelayInfo(
+            peer_id=second_relay.get_id(),
+            discovered_at=now,
+            last_seen=now,
+            has_reservation=True,
+            reservation_expires_at=now + 60,
+        )
+
+        selected = await transport._select_relay(PeerInfo(first_relay.get_id(), []))
+
+        assert selected == second_relay.get_id()
+
+
+@pytest.mark.trio
 async def test_circuit_v2_transport_parses_circuit_multiaddr():
     async with HostFactory.create_batch_and_listen(3) as hosts:
         client_host, relay_host, target_host = hosts

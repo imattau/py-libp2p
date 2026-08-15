@@ -7,6 +7,7 @@ allowing peers to establish connections through relay nodes.
 
 from collections.abc import Awaitable, Callable
 import logging
+import time
 
 import multiaddr
 import trio
@@ -275,14 +276,45 @@ class CircuitV2Transport(ITransport):
             Selected relay peer ID, or None if no suitable relay found
 
         """
-        # Try to find a relay
+        # Prefer a relay whose reservation is already usable. This avoids
+        # unnecessary reservation churn while keeping discovery fallback intact.
+        now = time.time()
+        relays = self.discovery.get_relays()
+        active_reservations = [
+            relay_id
+            for relay_id in relays
+            if (
+                (relay_info := self.discovery.get_relay_info(relay_id)) is not None
+                and relay_info.has_reservation
+                and relay_info.reservation_expires_at is not None
+                and relay_info.reservation_expires_at > now
+            )
+        ]
+        if active_reservations:
+            return max(
+                active_reservations,
+                key=lambda relay_id: self.discovery.get_relay_info(
+                    relay_id
+                ).reservation_expires_at
+                or 0,
+            )
+
+        # Fall back to the most recently seen relay while discovery catches up.
+        if relays:
+            return max(
+                relays,
+                key=lambda relay_id: self.discovery.get_relay_info(
+                    relay_id
+                ).last_seen
+                if self.discovery.get_relay_info(relay_id) is not None
+                else 0,
+            )
+
+        # Try discovery when no relay is currently tracked.
         attempts = 0
         while attempts < self.client_config.max_auto_relay_attempts:
-            # Get a relay from the list of discovered relays
             relays = self.discovery.get_relays()
             if relays:
-                # TODO: Implement more sophisticated relay selection
-                # For now, just return the first available relay
                 return relays[0]
 
             # Wait and try discovery
