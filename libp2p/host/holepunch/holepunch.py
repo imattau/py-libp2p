@@ -88,12 +88,20 @@ class HolePunchService:
             connect = await self._read_message(stream)
             if connect.type != HolePunch.CONNECT:
                 raise HolePunchProtocolError("expected DCUtR CONNECT")
+            remote_addresses = self._addresses(connect)
             await stream.write(
                 self._message(HolePunch.CONNECT, self._candidate_addrs())
             )
             sync = await self._read_message(stream)
             if sync.type != HolePunch.SYNC:
                 raise HolePunchProtocolError("expected DCUtR SYNC")
+            direct_addresses = self._direct_addresses(remote_addresses)
+            dial_peer_direct = getattr(
+                self.host.get_network(), "dial_peer_direct", None
+            )
+            peer_id = stream.muxed_conn.peer_id
+            if direct_addresses and dial_peer_direct is not None:
+                await dial_peer_direct(peer_id, direct_addresses)
         except (HolePunchProtocolError, EOFError) as error:
             logger.debug("invalid DCUtR stream: %s", error)
         finally:

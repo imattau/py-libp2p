@@ -15,10 +15,11 @@ ADDR = Multiaddr("/ip4/198.51.100.10/tcp/4001")
 
 
 class MemoryStream:
-    def __init__(self, incoming: bytes = b"") -> None:
+    def __init__(self, incoming: bytes = b"", peer_id: bytes = b"peer") -> None:
         self.incoming = bytearray(incoming)
         self.writes: list[bytes] = []
         self.closed = False
+        self.muxed_conn = type("MuxedConn", (), {"peer_id": peer_id})()
 
     async def read(self, n: int | None = None) -> bytes:
         if not self.incoming:
@@ -36,8 +37,9 @@ class MemoryStream:
 
 
 class FakeHost:
-    def __init__(self, stream: MemoryStream) -> None:
+    def __init__(self, stream: MemoryStream, network=None) -> None:
         self.stream = stream
+        self.network = network
 
     def set_stream_handler(self, protocol_id, handler) -> None:
         assert protocol_id == HOLEPUNCH_PROTOCOL_ID
@@ -45,6 +47,9 @@ class FakeHost:
 
     def get_addrs(self) -> Iterable[Multiaddr]:
         return (ADDR,)
+
+    def get_network(self):
+        return self.network
 
     async def new_stream(self, peer_id, protocols):
         assert protocols == [HOLEPUNCH_PROTOCOL_ID]
@@ -80,6 +85,31 @@ async def test_handler_rejects_sync_as_first_message() -> None:
 
     assert stream.closed
     assert stream.writes == []
+
+
+@pytest.mark.trio
+async def test_handler_dials_remote_candidates_after_sync() -> None:
+    connect = HolePunch(type=HolePunch.CONNECT, ObsAddrs=[ADDR.to_bytes()])
+    sync = HolePunch(type=HolePunch.SYNC)
+    stream = MemoryStream(
+        encode_varint_prefixed(connect.SerializeToString())
+        + encode_varint_prefixed(sync.SerializeToString())
+    )
+
+    class Network:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def dial_peer_direct(self, peer_id, addresses) -> None:
+            self.calls.append((peer_id, addresses))
+
+    network = Network()
+    service = HolePunchService(FakeHost(stream, network))
+
+    await service.handle_stream(stream)
+
+    assert network.calls == [(b"peer", (ADDR,))]
+    assert stream.closed
 
 
 def test_message_size_is_bounded() -> None:
