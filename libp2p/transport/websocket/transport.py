@@ -91,10 +91,17 @@ class WebSocketListener(IListener):
 
 
 class WebSocket(ITransport):
-    def __init__(self, ssl_context: ssl.SSLContext | None = None) -> None:
+    def __init__(
+        self,
+        ssl_context: ssl.SSLContext | None = None,
+        nursery: trio.Nursery | None = None,
+    ) -> None:
         self.ssl_context = ssl_context
+        self.nursery = nursery
 
     async def dial(self, maddr: Multiaddr) -> IRawConnection:
+        if self.nursery is None:
+            raise RuntimeError("WebSocket.dial requires a Trio nursery")
         host, port, secure = _websocket_params(maddr)
         scheme = "wss" if secure else "ws"
         if secure and self.ssl_context is None:
@@ -102,17 +109,27 @@ class WebSocket(ITransport):
                 "wss dial requires an SSL context configured on WebSocket"
             )
         ssl_context = self.ssl_context if secure else None
-        try:
-            context_manager = open_websocket_url(
+
+        async def open_connection(
+            task_status: TaskStatus[WebSocketConnection] = trio.TASK_STATUS_IGNORED,
+        ) -> None:
+            close_signal = trio.Event()
+            async with open_websocket_url(
                 f"{scheme}://{host}:{port}/",
                 ssl_context=ssl_context,
-            )
-            websocket = await context_manager.__aenter__()
+            ) as websocket:
+                connection = WebSocketConnection(
+                    websocket, True, close_signal
+                )
+                task_status.started(connection)
+                await close_signal.wait()
+
+        try:
+            return await self.nursery.start(open_connection)
         except Exception as error:
             raise OpenConnectionError(
                 f"Failed to open WebSocket to {maddr}: {error}"
             ) from error
-        return WebSocketConnection(websocket, True, context_manager)
 
     def create_listener(self, handler_function: THandler) -> WebSocketListener:
         return WebSocketListener(handler_function, self.ssl_context)

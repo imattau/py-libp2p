@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections import deque
 from typing import Protocol
 
+import trio
+from trio_websocket import ConnectionClosed
+
 from libp2p.abc import IRawConnection
 
 
@@ -21,11 +24,11 @@ class WebSocketConnection(IRawConnection):
         self,
         websocket: WebSocketLike,
         is_initiator: bool,
-        context_manager: object | None = None,
+        close_signal: trio.Event | None = None,
     ) -> None:
         self.websocket = websocket
         self.is_initiator = is_initiator
-        self._context_manager = context_manager
+        self._close_signal = close_signal
         self._buffer: deque[bytes] = deque()
         self._closed = False
 
@@ -33,7 +36,11 @@ class WebSocketConnection(IRawConnection):
         if self._closed and not self._buffer:
             return b""
         while not self._buffer:
-            message = await self.websocket.get_message()
+            try:
+                message = await self.websocket.get_message()
+            except ConnectionClosed:
+                self._closed = True
+                return b""
             if isinstance(message, str):
                 raise ValueError("libp2p WebSocket transport requires binary messages")
             if message:
@@ -57,8 +64,8 @@ class WebSocketConnection(IRawConnection):
     async def close(self) -> None:
         if not self._closed:
             self._closed = True
-            if self._context_manager is not None:
-                await self._context_manager.__aexit__(None, None, None)
+            if self._close_signal is not None:
+                self._close_signal.set()
             else:
                 await self.websocket.aclose()
 

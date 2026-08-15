@@ -4,8 +4,11 @@ import pytest
 from multiaddr import Multiaddr
 import trio
 
+from libp2p import new_swarm
 from libp2p.crypto.ed25519 import create_new_key_pair
+from libp2p.peer.peerstore import PeerStore
 from libp2p.security.tls import TLSIdentity
+from libp2p.tools.async_service import background_trio_service
 from libp2p.transport.exceptions import OpenConnectionError
 from libp2p.transport.websocket.connection import WebSocketConnection
 from libp2p.transport.websocket.transport import WebSocket, WebSocketListener
@@ -60,8 +63,8 @@ async def test_websocket_transport_round_trip_over_loopback():
         await connection.close()
 
     listener = WebSocketListener(handle_server_connection)
-    transport = WebSocket()
     async with trio.open_nursery() as nursery:
+        transport = WebSocket(nursery=nursery)
         assert await listener.listen(
             Multiaddr("/ip4/127.0.0.1/tcp/0/ws"), nursery
         )
@@ -77,10 +80,10 @@ async def test_websocket_transport_round_trip_over_loopback():
 @pytest.mark.trio
 async def test_wss_requires_explicit_tls_configuration():
     address = Multiaddr("/ip4/127.0.0.1/tcp/443/wss")
-    transport = WebSocket()
 
-    with pytest.raises(OpenConnectionError, match="SSL context"):
-        await transport.dial(address)
+    async with trio.open_nursery() as nursery:
+        with pytest.raises(OpenConnectionError, match="SSL context"):
+            await WebSocket(nursery=nursery).dial(address)
 
 
 @pytest.mark.trio
@@ -105,8 +108,8 @@ async def test_wss_transport_round_trip_with_explicit_contexts(tmp_path):
         await connection.close()
 
     listener = WebSocketListener(handle_server_connection, server_context)
-    transport = WebSocket(client_context)
     async with trio.open_nursery() as nursery:
+        transport = WebSocket(client_context, nursery)
         assert await listener.listen(
             Multiaddr("/ip4/127.0.0.1/tcp/0/wss"), nursery
         )
@@ -117,3 +120,28 @@ async def test_wss_transport_round_trip_with_explicit_contexts(tmp_path):
         await connection.close()
         nursery.cancel_scope.cancel()
     await listener.close()
+
+
+@pytest.mark.trio
+async def test_websocket_transport_integrates_with_swarm_upgrades():
+    key_pair_0 = create_new_key_pair(seed=b"x" * 32)
+    key_pair_1 = create_new_key_pair(seed=b"y" * 32)
+    listen_addr = Multiaddr("/ip4/127.0.0.1/tcp/0/ws")
+    swarm_0 = new_swarm(
+        key_pair=key_pair_0,
+        peerstore_opt=PeerStore(),
+        listen_addrs=[listen_addr],
+    )
+    swarm_1 = new_swarm(
+        key_pair=key_pair_1,
+        peerstore_opt=PeerStore(),
+        listen_addrs=[listen_addr],
+    )
+
+    async with background_trio_service(swarm_0), background_trio_service(swarm_1):
+        assert await swarm_1.listen(listen_addr)
+        remote_addr = next(iter(swarm_1.listeners.values())).get_addrs()[0]
+        swarm_0.peerstore.add_addrs(swarm_1.get_peer_id(), [remote_addr], 60_000)
+        connection = await swarm_0.dial_peer(swarm_1.get_peer_id())
+
+        assert connection.muxed_conn.peer_id == swarm_1.get_peer_id()
