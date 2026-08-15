@@ -5,6 +5,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import Encoding
 
 from libp2p.crypto.ed25519 import create_new_key_pair
+from libp2p.security.tls.certificate import LIBP2P_CERTIFICATE_VALIDITY
 from libp2p.transport.quic.config import QuicTransportConfig
 from libp2p.transport.quic.connection import (
     LIBP2P_PUBLIC_KEY_EXTENSION,
@@ -37,6 +38,10 @@ def test_create_libp2p_certificate_carries_signed_host_key():
     assert certificate.issuer == certificate.subject
     assert isinstance(certificate_key, ec.EllipticCurvePrivateKey)
     assert certificate.public_bytes(Encoding.DER)
+    assert (
+        certificate.not_valid_after_utc - certificate.not_valid_before_utc
+        >= LIBP2P_CERTIFICATE_VALIDITY
+    )
 
     signed_key = extension.value.value
     assert signed_key.startswith(b"\x30")
@@ -96,3 +101,29 @@ def test_peer_id_from_certificate_rejects_tampered_signature():
 
     with pytest.raises(ValueError, match="identity signature"):
         peer_id_from_certificate(tampered_certificate)
+
+
+def test_peer_id_from_certificate_rejects_invalid_certificate_signature():
+    certificate, certificate_key = create_libp2p_certificate(
+        create_new_key_pair(seed=b"s" * 32)
+    )
+    replacement_key = ec.generate_private_key(ec.SECP256R1())
+    invalid_certificate = (
+        x509.CertificateBuilder()
+        .subject_name(certificate.subject)
+        .issuer_name(certificate.issuer)
+        .public_key(replacement_key.public_key())
+        .serial_number(certificate.serial_number)
+        .not_valid_before(certificate.not_valid_before_utc)
+        .not_valid_after(certificate.not_valid_after_utc)
+        .add_extension(
+            certificate.extensions.get_extension_for_oid(
+                LIBP2P_PUBLIC_KEY_EXTENSION
+            ).value,
+            critical=True,
+        )
+        .sign(certificate_key, hashes.SHA256())
+    )
+
+    with pytest.raises(ValueError, match="certificate signature"):
+        peer_id_from_certificate(invalid_certificate)
