@@ -95,6 +95,9 @@ logs
 # vs-code
 .vscode
 
+# Local agent/tool config
+opencode.json
+
 # jupyter notebook files
 *.ipynb
 

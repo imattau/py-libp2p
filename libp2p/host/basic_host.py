@@ -19,6 +19,7 @@ from libp2p.abc import (
     INetConn,
     INetStream,
     INetworkService,
+    INotifee,
     IPeerStore,
 )
 from libp2p.crypto.keys import (
@@ -95,6 +96,7 @@ class BasicHost(IHost):
         enable_mDNS: bool = False,
         bootstrap: list[str] | None = None,
         default_protocols: Optional["OrderedDict[TProtocol, StreamHandlerFn]"] = None,
+        conn_manager: INotifee | None = None,
         negotitate_timeout: int = DEFAULT_NEGOTIATE_TIMEOUT,
     ) -> None:
         self._network = network
@@ -109,6 +111,9 @@ class BasicHost(IHost):
             self.mDNS = MDNSDiscovery(network)
         if bootstrap:
             self.bootstrap = BootstrapDiscovery(network, bootstrap)
+        self.conn_manager = conn_manager
+        if conn_manager is not None:
+            self._network.register_notifee(conn_manager)
 
     def get_id(self) -> ID:
         """

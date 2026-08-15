@@ -1,5 +1,6 @@
 from libp2p.abc import (
     INetworkService,
+    INotifee,
     IPeerRouting,
 )
 from libp2p.host.basic_host import (
@@ -24,8 +25,14 @@ class RoutedHost(BasicHost):
         router: IPeerRouting,
         enable_mDNS: bool = False,
         bootstrap: list[str] | None = None,
+        conn_manager: INotifee | None = None,
     ):
-        super().__init__(network, enable_mDNS, bootstrap)
+        super().__init__(
+            network,
+            enable_mDNS=enable_mDNS,
+            bootstrap=bootstrap,
+            conn_manager=conn_manager,
+        )
         self._router = router
 
     async def connect(self, peer_info: PeerInfo) -> None:

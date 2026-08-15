@@ -16,6 +16,7 @@ from libp2p.abc import (
     IHost,
     IMuxedConn,
     INetworkService,
+    INotifee,
     IPeerRouting,
     IPeerStore,
     ISecureTransport,
@@ -252,6 +253,7 @@ def new_host(
     listen_addrs: Sequence[multiaddr.Multiaddr] | None = None,
     enable_mDNS: bool = False,
     bootstrap: list[str] | None = None,
+    conn_manager: INotifee | None = None,
     negotiate_timeout: int = DEFAULT_NEGOTIATE_TIMEOUT,
 ) -> IHost:
     """
@@ -266,6 +268,7 @@ def new_host(
     :param listen_addrs: optional list of multiaddrs to listen on
     :param enable_mDNS: whether to enable mDNS discovery
     :param bootstrap: optional list of bootstrap peer addresses as strings
+    :param conn_manager: optional network notifee for connection management
     :return: return a host instance
     """
     swarm = new_swarm(
@@ -278,7 +281,19 @@ def new_host(
     )
 
     if disc_opt is not None:
-        return RoutedHost(swarm, disc_opt, enable_mDNS, bootstrap)
-    return BasicHost(network=swarm,enable_mDNS=enable_mDNS , bootstrap=bootstrap, negotitate_timeout=negotiate_timeout)
+        return RoutedHost(
+            swarm,
+            disc_opt,
+            enable_mDNS=enable_mDNS,
+            bootstrap=bootstrap,
+            conn_manager=conn_manager,
+        )
+    return BasicHost(
+        network=swarm,
+        enable_mDNS=enable_mDNS,
+        bootstrap=bootstrap,
+        conn_manager=conn_manager,
+        negotitate_timeout=negotiate_timeout,
+    )
 
 __version__ = __version("libp2p")

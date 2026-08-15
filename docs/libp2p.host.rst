@@ -8,6 +8,7 @@ Subpackages
    :maxdepth: 4
 
    libp2p.host.autonat
+   libp2p.host.connmgr
 
 Submodules
 ----------
