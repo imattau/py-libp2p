@@ -13,12 +13,14 @@ from .aiortc_engine import (
     WebRTCDependencyError,
 )
 from .connection import WebRTCConnection
+from .direct import WebRTCDirectAddress
 
 __all__ = [
     "AsyncioLoopThread",
     "AiortcWebRTCEngine",
     "MAX_MESSAGE_SIZE",
     "WebRTCConnection",
+    "WebRTCDirectAddress",
     "WebRTCDependencyError",
     "WebRTCFrame",
     "SessionDescription",

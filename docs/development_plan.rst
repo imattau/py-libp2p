@@ -135,9 +135,11 @@ dependency.
      control-frame model used by both WebRTC Direct and private-to-private WebRTC.
      An optional aiortc peer-connection wrapper now runs behind a dedicated asyncio
      loop thread and exposes SDP plus data-channel operations to Trio. WebRTC Direct
-     certificate-address handling and relay-assisted SDP signaling remain.
-     *Status: shared framing and engine boundary complete; transport signaling
-     implementations pending. Effort remaining: high. Risk: high.*
+     address parsing and certificate multihash verification are also covered.
+     Offer/answer signaling over the Direct wire protocol and relay-assisted SDP
+     signaling remain.
+     *Status: shared framing, engine boundary, and Direct address trust complete;
+     transport signaling implementations pending. Effort remaining: high. Risk: high.*
 
 P3 — NAT traversal
 ~~~~~~~~~~~~~~~~~~
