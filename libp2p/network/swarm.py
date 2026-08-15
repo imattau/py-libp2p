@@ -212,6 +212,8 @@ class Swarm(Service, INetworkService):
             ) from error
 
         logger.debug("dialed peer %s over base transport", peer_id)
+        if hasattr(raw_conn, "remote_multiaddr"):
+            raw_conn.remote_multiaddr = addr
 
         if getattr(self.transport, "native_connections", False):
             native_conn = raw_conn

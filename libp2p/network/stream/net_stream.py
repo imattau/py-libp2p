@@ -293,6 +293,10 @@ class NetStream(INetStream):
         """Delegate to the underlying muxed stream."""
         return self.muxed_stream.get_remote_address()
 
+    def get_remote_multiaddr(self):
+        """Return the remote multiaddress of the underlying connection."""
+        return getattr(self.muxed_conn, "get_remote_multiaddr", lambda: None)()
+
     async def is_closed(self) -> bool:
         """Check if stream is closed."""
         current_state = await self.state

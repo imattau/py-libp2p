@@ -366,3 +366,7 @@ class Mplex(IMuxedConn):
     def get_remote_address(self) -> tuple[str, int] | None:
         """Delegate to the underlying Mplex connection's secured_conn."""
         return self.secured_conn.get_remote_address()
+
+    def get_remote_multiaddr(self):
+        """Delegate to the underlying secured connection."""
+        return getattr(self.secured_conn, "get_remote_multiaddr", lambda: None)()

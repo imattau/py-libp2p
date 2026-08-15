@@ -1,3 +1,5 @@
+from multiaddr import Multiaddr
+
 from libp2p.abc import (
     IRawConnection,
 )
@@ -20,6 +22,7 @@ class RawConnection(IRawConnection):
     def __init__(self, stream: ReadWriteCloser, initiator: bool) -> None:
         self.stream = stream
         self.is_initiator = initiator
+        self.remote_multiaddr: Multiaddr | None = None
 
     async def write(self, data: bytes) -> None:
         """Raise `RawConnError` if the underlying connection breaks."""
@@ -46,3 +49,9 @@ class RawConnection(IRawConnection):
     def get_remote_address(self) -> tuple[str, int] | None:
         """Delegate to the underlying stream's get_remote_address method."""
         return self.stream.get_remote_address()
+
+    def get_remote_multiaddr(self) -> Multiaddr | None:
+        """Return the dialed or accepted remote multiaddress when available."""
+        if self.remote_multiaddr is not None:
+            return self.remote_multiaddr
+        return getattr(self.stream, "get_remote_multiaddr", lambda: None)()

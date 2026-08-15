@@ -314,6 +314,10 @@ class YamuxStream(IMuxedStream):
             # Return None if the underlying connection doesn't provide this info
             return None
 
+    def get_remote_multiaddr(self):
+        """Delegate to the underlying secured connection."""
+        return getattr(self.conn.secured_conn, "get_remote_multiaddr", lambda: None)()
+
 
 class Yamux(IMuxedConn):
     def __init__(

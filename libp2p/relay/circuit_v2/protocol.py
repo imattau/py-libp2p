@@ -13,6 +13,7 @@ from typing import (
     runtime_checkable,
 )
 
+from multiaddr import Multiaddr
 import trio
 
 from libp2p.abc import (
@@ -75,6 +76,14 @@ DEFAULT_RELAY_LIMITS = RelayLimits(
     max_circuit_conns=8,
     max_reservations=4,
 )
+
+
+def _is_relayed_multiaddr(addr: Multiaddr | None) -> bool:
+    """Return whether an address contains a circuit-relay hop."""
+    return addr is not None and any(
+        protocol.name == "p2p-circuit" for protocol in addr.protocols()
+    )
+
 
 # Stream operation timeouts
 STREAM_READ_TIMEOUT = 15  # seconds
@@ -415,6 +424,16 @@ class CircuitV2Protocol(Service):
                 return
 
             # Process based on message type
+            remote_multiaddr = getattr(stream, "get_remote_multiaddr", lambda: None)()
+            if _is_relayed_multiaddr(remote_multiaddr):
+                await self._send_status(
+                    stream,
+                    StatusCode.PERMISSION_DENIED,
+                    "Relay requests over relayed connections are not allowed",
+                )
+                await stream.reset()
+                return
+
             if hop_msg.type == HopMessage.RESERVE:
                 logger.debug("Handling RESERVE message from %s", remote_id)
                 await self._handle_reserve(stream, hop_msg, remote_peer_id)
