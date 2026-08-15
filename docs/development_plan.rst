@@ -73,16 +73,15 @@ as the first step.
    connection manager, resource manager, identify, AutoNAT, and observability can share
    the same host signals. The existing notifee surface now emits connection,
    disconnection, stream-open, stream-close, listen, and listen-close events from the
-   swarm lifecycle.
+   swarm lifecycle, and ``libp2p.network.events.EventBus`` provides typed
+   subscription/filter semantics for the same events.
 
    Remaining parity work:
 
-   * Add a typed host event bus with subscription/filter semantics instead of only
-     direct notifee callbacks.
    * Migrate identify, AutoNAT, pubsub, connection manager, and resource manager
      integration points onto the shared event surface where appropriate.
-   * Add event ordering/backpressure expectations and regression coverage.
-   *Status: in progress. Effort remaining: medium. Risk: low. Depends on: connmgr.*
+   * Extend event ordering/backpressure coverage as more services consume the bus.
+   *Status: in progress. Effort remaining: low. Risk: low. Depends on: connmgr.*
 
 5. **Async model decision.**
    Confirm whether the port continues on Trio or starts an asyncio migration before

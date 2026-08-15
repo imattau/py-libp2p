@@ -52,6 +52,15 @@ from .connection.raw_connection import (
 from .connection.swarm_connection import (
     SwarmConn,
 )
+from .events import (
+    EventBus,
+    EventClosedStream,
+    EventConnected,
+    EventDisconnected,
+    EventListen,
+    EventListenClose,
+    EventOpenedStream,
+)
 from .exceptions import (
     SwarmException,
 )
@@ -79,6 +88,7 @@ class Swarm(Service, INetworkService):
     common_stream_handler: StreamHandlerFn
     listener_nursery: trio.Nursery | None
     event_listener_nursery_created: trio.Event
+    event_bus: EventBus
 
     notifees: list[INotifee]
 
@@ -97,6 +107,7 @@ class Swarm(Service, INetworkService):
         self.resource_manager = resource_manager or NullResourceManager()
         self.connections = dict()
         self.listeners = dict()
+        self.event_bus = EventBus()
 
         # Create Notifee array
         self.notifees = []
@@ -121,6 +132,9 @@ class Swarm(Service, INetworkService):
 
     def get_peer_id(self) -> ID:
         return self.self_id
+
+    def get_event_bus(self) -> EventBus:
+        return self.event_bus
 
     def set_stream_handler(self, stream_handler: StreamHandlerFn) -> None:
         self.common_stream_handler = stream_handler
@@ -422,31 +436,37 @@ class Swarm(Service, INetworkService):
         self.notifees.append(notifee)
 
     async def notify_opened_stream(self, stream: INetStream) -> None:
+        await self.event_bus.publish(EventOpenedStream(stream))
         async with trio.open_nursery() as nursery:
             for notifee in self.notifees:
                 nursery.start_soon(notifee.opened_stream, self, stream)
 
     async def notify_connected(self, conn: INetConn) -> None:
+        await self.event_bus.publish(EventConnected(conn))
         async with trio.open_nursery() as nursery:
             for notifee in self.notifees:
                 nursery.start_soon(notifee.connected, self, conn)
 
     async def notify_disconnected(self, conn: INetConn) -> None:
+        await self.event_bus.publish(EventDisconnected(conn))
         async with trio.open_nursery() as nursery:
             for notifee in self.notifees:
                 nursery.start_soon(notifee.disconnected, self, conn)
 
     async def notify_listen(self, multiaddr: Multiaddr) -> None:
+        await self.event_bus.publish(EventListen(multiaddr))
         async with trio.open_nursery() as nursery:
             for notifee in self.notifees:
                 nursery.start_soon(notifee.listen, self, multiaddr)
 
     async def notify_closed_stream(self, stream: INetStream) -> None:
+        await self.event_bus.publish(EventClosedStream(stream))
         async with trio.open_nursery() as nursery:
             for notifee in self.notifees:
                 nursery.start_soon(notifee.closed_stream, self, stream)
 
     async def notify_listen_close(self, multiaddr: Multiaddr) -> None:
+        await self.event_bus.publish(EventListenClose(multiaddr))
         async with trio.open_nursery() as nursery:
             for notifee in self.notifees:
                 nursery.start_soon(notifee.listen_close, self, multiaddr)

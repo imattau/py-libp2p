@@ -21,6 +21,14 @@ libp2p.network.exceptions module
    :undoc-members:
    :show-inheritance:
 
+libp2p.network.events module
+----------------------------
+
+.. automodule:: libp2p.network.events
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 libp2p.network.swarm module
 ---------------------------
 
