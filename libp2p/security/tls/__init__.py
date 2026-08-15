@@ -13,6 +13,7 @@ from .certificate import (
 )
 from .identity import TLSIdentity
 from .context import create_tls_context
+from .transport import TLSTransport
 
 __all__ = [
     "LIBP2P_CERTIFICATE_VALIDITY",
@@ -23,4 +24,5 @@ __all__ = [
     "peer_id_from_certificate",
     "TLSIdentity",
     "create_tls_context",
+    "TLSTransport",
 ]
