@@ -336,6 +336,11 @@ async def test_handle_dial_reports_filtered_successful_address():
         message.dial.peer.addrs.extend(
             [
                 Multiaddr("/ip4/198.51.100.1/tcp/4001").to_bytes(),
+                Multiaddr(
+                    "/p2p/QmNM23MiU1Kd7yfiKVdUnaDo8RYca8By4zDmr7uSaVV8Px"
+                    "/p2p-circuit/"
+                    "p2p/QmNM23MiU1Kd7yfiKVdUnaDo8RYca8By4zDmr7uSaVV8Px"
+                ).to_bytes(),
                 Multiaddr("/ip4/127.0.0.1/tcp/4002").to_bytes(),
             ]
         )

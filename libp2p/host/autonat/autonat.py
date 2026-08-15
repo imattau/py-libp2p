@@ -203,6 +203,10 @@ class AutoNATService:
         for raw_addr in peer.addrs:
             try:
                 address = Multiaddr(raw_addr)
+                if any(
+                    protocol.name == "p2p-circuit" for protocol in address.protocols()
+                ):
+                    continue
                 if remote_address is not None:
                     address_ip = (
                         address.value_for_protocol("ip4")
