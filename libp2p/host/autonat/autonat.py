@@ -171,6 +171,9 @@ class AutoNATService:
             return response
 
         peer = message.dial.peer
+        if not peer.id:
+            response.dialResponse.status = Message.E_BAD_REQUEST
+            return response
         peer_id = ID(peer.id)
         addresses: list[Multiaddr] = []
         for raw_addr in peer.addrs:
@@ -184,7 +187,7 @@ class AutoNATService:
                     if address_ip != remote_address[0]:
                         continue
                 addresses.append(address)
-            except (UnicodeDecodeError, ValueError):
+            except (TypeError, ValueError):
                 logger.debug("ignoring invalid AutoNAT address for %s", peer_id)
         if not addresses and remote_address is not None:
             response.dialResponse.status = Message.E_DIAL_REFUSED

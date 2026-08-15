@@ -212,6 +212,22 @@ async def test_handle_dial_refuses_address_for_different_ip():
 
 
 @pytest.mark.trio
+async def test_handle_dial_rejects_missing_peer_id():
+    async with HostFactory.create_batch_and_listen(1) as hosts:
+        service = AutoNATService(hosts[0])
+        message = Message(type=Message.DIAL)
+        message.dial.peer.addrs.append(
+            Multiaddr("/ip4/127.0.0.1/tcp/4001").to_bytes()
+        )
+
+        with patch.object(service, "_try_dial", new_callable=AsyncMock) as dial:
+            response = await service._handle_dial(message, ("127.0.0.1", 4000))
+
+        assert response.dialResponse.status == Message.E_BAD_REQUEST
+        dial.assert_not_awaited()
+
+
+@pytest.mark.trio
 async def test_handle_dial_reports_filtered_successful_address():
     async with HostFactory.create_batch_and_listen(1) as hosts:
         service = AutoNATService(hosts[0])
