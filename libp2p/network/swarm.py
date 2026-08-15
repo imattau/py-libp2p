@@ -211,6 +211,24 @@ class Swarm(Service, INetworkService):
 
         logger.debug("dialed peer %s over base transport", peer_id)
 
+        if getattr(self.transport, "native_connections", False):
+            native_conn = raw_conn
+            try:
+                await native_conn.wait_handshake()
+                if native_conn.peer_id != peer_id:
+                    raise SwarmException(
+                        f"connected to unexpected peer {native_conn.peer_id}"
+                    )
+                conn_scope.set_peer(peer_id)
+                swarm_conn = await self.add_conn(native_conn)
+                swarm_conn.resource_scope = conn_scope
+                logger.debug("successfully dialed native peer %s", peer_id)
+                return swarm_conn
+            except Exception:
+                await native_conn.close()
+                conn_scope.done()
+                raise
+
         # Per, https://discuss.libp2p.io/t/multistream-security/130, we first secure
         # the conn and then mux the conn
         try:
@@ -288,6 +306,26 @@ class Swarm(Service, INetworkService):
                     use_fd=True,
                     endpoint=maddr,
                 )
+
+                if getattr(self.transport, "native_connections", False):
+                    native_conn = read_write_closer
+                    try:
+                        await native_conn.wait_handshake()
+                        peer_id = native_conn.peer_id
+                        conn_scope.set_peer(peer_id)
+                        swarm_conn = await self.add_conn(native_conn)
+                        swarm_conn.resource_scope = conn_scope
+                        logger.debug(
+                            "successfully opened native connection to peer %s",
+                            peer_id,
+                        )
+                        await self.manager.wait_finished()
+                    except Exception:
+                        await native_conn.close()
+                        conn_scope.done()
+                        raise
+                    return
+
                 raw_conn = RawConnection(read_write_closer, False)
 
                 # Per, https://discuss.libp2p.io/t/multistream-security/130, we first

@@ -26,3 +26,9 @@ async def test_transport_requires_nursery_for_dial():
 
 def test_transport_rejects_non_quic_multiaddr():
     assert not _is_quic_v1(Multiaddr("/ip4/127.0.0.1/udp/1/quic"))
+
+
+def test_transport_uses_native_connection_path():
+    transport = QuicTransport(create_new_key_pair(seed=b"w" * 32))
+
+    assert transport.native_connections is True

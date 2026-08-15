@@ -17,6 +17,8 @@ from .listener import QuicListener
 class QuicTransport(ITransport):
     """Public transport facade for the native Trio QUIC implementation."""
 
+    native_connections = True
+
     def __init__(self, key_pair: KeyPair, nursery: trio.Nursery | None = None) -> None:
         self.key_pair = key_pair
         self.nursery = nursery
