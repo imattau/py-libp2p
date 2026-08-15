@@ -7,6 +7,7 @@ import pytest
 from multiaddr import Multiaddr
 
 from libp2p.host.autonat.autonat import (
+    AUTONAT_MIN_RESPONSES,
     AUTONAT_PROTOCOL_ID,
     AutoNATService,
     AutoNATStatus,
@@ -70,23 +71,32 @@ async def test_update_status():
         service.update_status()
         assert service.status == AutoNATStatus.UNKNOWN
 
-        # Less than 2 successful dials should result in PRIVATE status
+        # Fewer than four consistent responses should remain UNKNOWN.
         service.dial_results = {
             ID(b"peer1"): True,
             ID(b"peer2"): False,
             ID(b"peer3"): False,
         }
         service.update_status()
-        assert service.status == AutoNATStatus.PRIVATE
+        assert service.status == AutoNATStatus.UNKNOWN
 
-        # 2 or more successful dials should result in PUBLIC status
+        # More than 3 successful dials should result in PUBLIC status.
         service.dial_results = {
             ID(b"peer1"): True,
             ID(b"peer2"): True,
             ID(b"peer3"): False,
+            ID(b"peer4"): True,
+            ID(b"peer5"): True,
         }
         service.update_status()
         assert service.status == AutoNATStatus.PUBLIC
+
+        # More than 3 failed dials should result in PRIVATE status.
+        service.dial_results = {
+            ID(f"peer{i}".encode()): False for i in range(AUTONAT_MIN_RESPONSES)
+        }
+        service.update_status()
+        assert service.status == AutoNATStatus.PRIVATE
 
 
 @pytest.mark.trio

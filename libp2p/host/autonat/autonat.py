@@ -27,6 +27,7 @@ from libp2p.utils.varint import (
 )
 
 AUTONAT_PROTOCOL_ID = TProtocol("/libp2p/autonat/1.0.0")
+AUTONAT_MIN_RESPONSES = 4
 
 logger = logging.getLogger("libp2p.host.autonat")
 
@@ -263,15 +264,18 @@ class AutoNATService:
         Update the AutoNAT status based on dial results.
 
         Analyzes the accumulated dial attempt results to determine if the
-        node is publicly reachable. The node is considered public if at
-        least two successful dial attempts have been recorded.
+        node is publicly reachable. The node is considered public or private
+        only after more than three distinct peers report the same result.
         """
         if not self.dial_results:
             self.status = AutoNATStatus.UNKNOWN
             return
 
         success_count = sum(1 for success in self.dial_results.values() if success)
-        if success_count >= 2:
+        failure_count = len(self.dial_results) - success_count
+        if success_count >= AUTONAT_MIN_RESPONSES:
             self.status = AutoNATStatus.PUBLIC
-        else:
+        elif failure_count >= AUTONAT_MIN_RESPONSES:
             self.status = AutoNATStatus.PRIVATE
+        else:
+            self.status = AutoNATStatus.UNKNOWN
