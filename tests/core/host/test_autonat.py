@@ -159,7 +159,9 @@ async def test_probe_sends_addresses_and_records_result():
         encoded_request = mock_stream.write.call_args.args[0]
         request = Message.FromString(encoded_request[1:])
         assert request.dial.peer.id == host1.get_id().to_bytes()
-        assert list(request.dial.peer.addrs) == [b"/ip4/127.0.0.1/tcp/4001"]
+        assert list(request.dial.peer.addrs) == [
+            Multiaddr("/ip4/127.0.0.1/tcp/4001").to_bytes()
+        ]
         mock_stream.close.assert_awaited_once()
 
 
@@ -175,7 +177,9 @@ async def test_handle_dial():
         message = Message(type=Message.DIAL)
         peer_info = message.dial.peer
         peer_info.id = peer_id.to_bytes()
-        peer_info.addrs.extend([b"/ip4/127.0.0.1/tcp/4001"])
+        peer_info.addrs.extend(
+            [Multiaddr("/ip4/127.0.0.1/tcp/4001").to_bytes()]
+        )
 
         # Mock the _try_dial method
         with patch.object(
@@ -196,7 +200,9 @@ async def test_handle_dial_refuses_address_for_different_ip():
         service = AutoNATService(hosts[0])
         message = Message(type=Message.DIAL)
         message.dial.peer.id = b"peer_id"
-        message.dial.peer.addrs.append(b"/ip4/198.51.100.1/tcp/4001")
+        message.dial.peer.addrs.append(
+            Multiaddr("/ip4/198.51.100.1/tcp/4001").to_bytes()
+        )
 
         with patch.object(service, "_try_dial", new_callable=AsyncMock) as dial:
             response = await service._handle_dial(message, ("127.0.0.1", 4000))
@@ -213,8 +219,8 @@ async def test_handle_dial_reports_filtered_successful_address():
         message.dial.peer.id = b"peer_id"
         message.dial.peer.addrs.extend(
             [
-                b"/ip4/198.51.100.1/tcp/4001",
-                b"/ip4/127.0.0.1/tcp/4002",
+                Multiaddr("/ip4/198.51.100.1/tcp/4001").to_bytes(),
+                Multiaddr("/ip4/127.0.0.1/tcp/4002").to_bytes(),
             ]
         )
 

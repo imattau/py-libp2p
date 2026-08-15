@@ -175,7 +175,7 @@ class AutoNATService:
         addresses: list[Multiaddr] = []
         for raw_addr in peer.addrs:
             try:
-                address = Multiaddr(raw_addr.decode())
+                address = Multiaddr(raw_addr)
                 if remote_address is not None:
                     address_ip = (
                         address.value_for_protocol("ip4")
@@ -243,7 +243,7 @@ class AutoNATService:
         request = Message(type=Message.DIAL)
         request_peer = request.dial.peer
         request_peer.id = self.host.get_id().to_bytes()
-        request_peer.addrs.extend(str(address).encode() for address in addresses)
+        request_peer.addrs.extend(address.to_bytes() for address in addresses)
 
         stream = await self.host.new_stream(server_peer_id, [AUTONAT_PROTOCOL_ID])
         try:
