@@ -135,10 +135,13 @@ P3 — NAT traversal
 The highest-impact end-user feature. Several pieces already exist as prototypes.
 
 12. **Finish & verify AutoNAT.**
-    ``libp2p/host/autonat/`` exists but is unproven against go-libp2p. Validate
-    client/server mode and integrate its reachability signal into the address book.
-    *Effort: medium. Risk: low. Depends on: event bus/notifee alignment (P0);
-    validate through interop harness (P7).*
+    ``libp2p/host/autonat/`` now provides an opt-in host service, address-aware
+    server dial-back, and client probing with a recorded reachability result.
+    Remaining work is policy hardening, broader address-book integration, and
+    validation against go-libp2p.
+    *Status: native implementation in progress; interop and policy validation
+    pending. Effort remaining: medium. Risk: low. Depends on: event bus/notifee
+    alignment (P0); validate through interop harness (P7).*
 
 13. **Finish & verify circuit-relay-v2.**
     ``libp2p/relay/circuit_v2/`` is substantial but untested cross-impl. Validate
