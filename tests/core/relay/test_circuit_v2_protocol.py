@@ -5,6 +5,7 @@ import time
 from typing import Any
 
 import pytest
+from multiaddr import Multiaddr
 import trio
 
 from libp2p.network.stream.exceptions import (
@@ -25,6 +26,7 @@ from libp2p.relay.circuit_v2.protocol import (
     PROTOCOL_ID,
     STOP_PROTOCOL_ID,
     CircuitV2Protocol,
+    _is_relayed_multiaddr,
 )
 from libp2p.relay.circuit_v2.resources import (
     RelayLimits,
@@ -264,6 +266,18 @@ def test_circuit_v2_protocol_ids_match_spec():
     """Circuit Relay v2 uses the versioned hop and stop protocol IDs."""
     assert str(PROTOCOL_ID) == "/libp2p/circuit/relay/0.2.0/hop"
     assert str(STOP_PROTOCOL_ID) == "/libp2p/circuit/relay/0.2.0/stop"
+
+
+def test_relayed_multiaddr_detection():
+    assert not _is_relayed_multiaddr(Multiaddr("/ip4/127.0.0.1/tcp/4001"))
+    assert _is_relayed_multiaddr(
+        Multiaddr(
+            "/p2p/QmNM23MiU1Kd7yfiKVdUnaDo8RYca8By4zDmr7uSaVV8Px"
+            "/p2p-circuit/"
+            "p2p/QmNM23MiU1Kd7yfiKVdUnaDo8RYca8By4zDmr7uSaVV8Px"
+        )
+    )
+    assert not _is_relayed_multiaddr(None)
 
 
 @pytest.mark.trio
