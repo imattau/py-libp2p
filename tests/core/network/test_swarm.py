@@ -26,6 +26,9 @@ from libp2p.transport.quic.transport import (
 from libp2p.transport.tcp.tcp import (
     TCP,
 )
+from libp2p.transport.websocket.transport import (
+    WebSocket,
+)
 from tests.utils.factories import (
     SwarmFactory,
 )
@@ -190,6 +193,13 @@ def test_new_swarm_quic_v1_uses_native_transport():
     swarm = new_swarm(listen_addrs=[addr])
     assert isinstance(swarm, Swarm)
     assert isinstance(swarm.transport, QuicTransport)
+
+
+def test_new_swarm_websocket_multiaddr_uses_websocket_transport():
+    addr = Multiaddr("/ip4/127.0.0.1/tcp/9999/ws")
+    swarm = new_swarm(listen_addrs=[addr])
+    assert isinstance(swarm, Swarm)
+    assert isinstance(swarm.transport, WebSocket)
 
 
 def test_new_swarm_unsupported_quic_multiaddr_raises():

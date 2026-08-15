@@ -85,6 +85,9 @@ from libp2p.transport.tcp.tcp import (
 from libp2p.transport.upgrader import (
     TransportUpgrader,
 )
+from libp2p.transport.websocket.transport import (
+    WebSocket,
+)
 from libp2p.utils.logging import (
     setup_logging,
 )
@@ -205,7 +208,9 @@ def new_swarm(
         transport = TCP()
     else:
         addr = listen_addrs[0]
-        if addr.__contains__("tcp"):
+        if any(protocol.name in {"ws", "wss"} for protocol in addr.protocols()):
+            transport = WebSocket()
+        elif addr.__contains__("tcp"):
             transport = TCP()
         elif any(protocol.name == "quic-v1" for protocol in addr.protocols()):
             transport = QuicTransport(key_pair)
