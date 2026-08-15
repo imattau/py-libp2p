@@ -109,6 +109,28 @@ async def test_swarm_close_peer(security_protocol):
 
 
 @pytest.mark.trio
+async def test_swarm_direct_dial_replaces_existing_connection(security_protocol):
+    async with SwarmFactory.create_batch_and_listen(
+        2, security_protocol=security_protocol
+    ) as swarms:
+        await connect_swarm(swarms[0], swarms[1])
+        old_connection = swarms[0].connections[swarms[1].get_peer_id()]
+        addresses = tuple(
+            address
+            for transport in swarms[1].listeners.values()
+            for address in transport.get_addrs()
+        )
+
+        direct_connection = await swarms[0].dial_peer_direct(
+            swarms[1].get_peer_id(), addresses[:1]
+        )
+
+        assert direct_connection is swarms[0].connections[swarms[1].get_peer_id()]
+        assert direct_connection is not old_connection
+        assert old_connection.is_closed
+
+
+@pytest.mark.trio
 async def test_swarm_remove_conn(swarm_pair):
     swarm_0, swarm_1 = swarm_pair
     conn_0 = swarm_0.connections[swarm_1.get_peer_id()]

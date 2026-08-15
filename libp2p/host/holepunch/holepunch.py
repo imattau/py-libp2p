@@ -73,6 +73,16 @@ class HolePunchService:
                 raise HolePunchProtocolError("invalid DCUtR multiaddr") from error
         return tuple(addresses)
 
+    @staticmethod
+    def _direct_addresses(addresses: Iterable[Multiaddr]) -> tuple[Multiaddr, ...]:
+        return tuple(
+            address
+            for address in addresses
+            if not any(
+                protocol.name == "p2p-circuit" for protocol in address.protocols()
+            )
+        )
+
     async def handle_stream(self, stream) -> None:
         try:
             connect = await self._read_message(stream)
@@ -106,6 +116,12 @@ class HolePunchService:
                 raise HolePunchProtocolError("expected DCUtR CONNECT response")
             remote_addresses = self._addresses(response)
             await stream.write(self._message(HolePunch.SYNC, ()))
+            direct_addresses = self._direct_addresses(remote_addresses)
+            dial_peer_direct = getattr(
+                self.host.get_network(), "dial_peer_direct", None
+            )
+            if direct_addresses and dial_peer_direct is not None:
+                await dial_peer_direct(peer_id, direct_addresses)
             return remote_addresses
         finally:
             await stream.close()

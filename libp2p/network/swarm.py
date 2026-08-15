@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 import logging
 
 from multiaddr import (
@@ -186,7 +187,13 @@ class Swarm(Service, INetworkService):
             "connection (with exceptions)"
         ) from MultiError(exceptions)
 
-    async def dial_addr(self, addr: Multiaddr, peer_id: ID) -> INetConn:
+    async def dial_addr(
+        self,
+        addr: Multiaddr,
+        peer_id: ID,
+        *,
+        replace_existing: bool = False,
+    ) -> INetConn:
         """
         Try to create a connection to peer_id with addr.
 
@@ -224,7 +231,9 @@ class Swarm(Service, INetworkService):
                         f"connected to unexpected peer {native_conn.peer_id}"
                     )
                 conn_scope.set_peer(peer_id)
-                swarm_conn = await self.add_conn(native_conn)
+                swarm_conn = await self.add_conn(
+                    native_conn, replace_existing=replace_existing
+                )
                 swarm_conn.resource_scope = conn_scope
                 logger.debug("successfully dialed native peer %s", peer_id)
                 return swarm_conn
@@ -258,12 +267,52 @@ class Swarm(Service, INetworkService):
 
         logger.debug("upgraded mux for peer %s", peer_id)
 
-        swarm_conn = await self.add_conn(muxed_conn)
+        swarm_conn = await self.add_conn(
+            muxed_conn, replace_existing=replace_existing
+        )
         swarm_conn.resource_scope = conn_scope
 
         logger.debug("successfully dialed peer %s", peer_id)
 
         return swarm_conn
+
+    async def dial_peer_direct(
+        self, peer_id: ID, addresses: Sequence[Multiaddr]
+    ) -> INetConn:
+        """Race direct addresses and replace an existing relay connection."""
+        if not addresses:
+            raise SwarmException(f"No direct addresses to peer {peer_id}")
+
+        send_channel, receive_channel = trio.open_memory_channel[
+            tuple[INetConn | None, Exception | None]
+        ](len(addresses))
+
+        async def attempt(address: Multiaddr) -> None:
+            try:
+                connection = await self.dial_addr(
+                    address, peer_id, replace_existing=True
+                )
+            except Exception as error:
+                await send_channel.send((None, error))
+            else:
+                await send_channel.send((connection, None))
+
+        exceptions: list[Exception] = []
+        async with trio.open_nursery() as nursery:
+            for address in addresses:
+                nursery.start_soon(attempt, address)
+
+            for _ in addresses:
+                connection, error = await receive_channel.receive()
+                if connection is not None:
+                    nursery.cancel_scope.cancel()
+                    return connection
+                if error is not None:
+                    exceptions.append(error)
+
+        raise SwarmException(
+            f"unable to establish a direct connection to {peer_id}"
+        ) from MultiError(exceptions)
 
     async def new_stream(self, peer_id: ID) -> INetStream:
         """
@@ -437,7 +486,9 @@ class Swarm(Service, INetworkService):
 
         logger.debug("successfully close the connection to peer %s", peer_id)
 
-    async def add_conn(self, muxed_conn: IMuxedConn) -> SwarmConn:
+    async def add_conn(
+        self, muxed_conn: IMuxedConn, *, replace_existing: bool = False
+    ) -> SwarmConn:
         """
         Add a `IMuxedConn` to `Swarm` as a `SwarmConn`, notify "connected",
         and start to monitor the connection for its new streams and
@@ -452,8 +503,11 @@ class Swarm(Service, INetworkService):
         await muxed_conn.event_started.wait()
         self.manager.run_task(swarm_conn.start)
         await swarm_conn.event_started.wait()
-        # Store muxed_conn with peer id
+        previous = self.connections.get(muxed_conn.peer_id)
+        # Store muxed_conn with peer id before closing the previous connection.
         self.connections[muxed_conn.peer_id] = swarm_conn
+        if previous is not None:
+            await previous.close()
         # Call notifiers since event occurred
         await self.notify_connected(swarm_conn)
         return swarm_conn
@@ -464,7 +518,7 @@ class Swarm(Service, INetworkService):
         the connection.
         """
         peer_id = swarm_conn.muxed_conn.peer_id
-        if peer_id not in self.connections:
+        if self.connections.get(peer_id) is not swarm_conn:
             return
         del self.connections[peer_id]
 
