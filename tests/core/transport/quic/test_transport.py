@@ -1,7 +1,11 @@
 import pytest
 from multiaddr import Multiaddr
+import trio
 
+from libp2p import new_swarm
 from libp2p.crypto.ed25519 import create_new_key_pair
+from libp2p.peer.peerstore import PeerStore
+from libp2p.tools.async_service import background_trio_service
 from libp2p.transport.quic.transport import (
     QuicTransport,
     _is_quic_v1,
@@ -32,3 +36,32 @@ def test_transport_uses_native_connection_path():
     transport = QuicTransport(create_new_key_pair(seed=b"w" * 32))
 
     assert transport.native_connections is True
+
+
+@pytest.mark.trio
+async def test_native_quic_transport_integrates_with_swarm():
+    key_pair_0 = create_new_key_pair(seed=b"x" * 32)
+    key_pair_1 = create_new_key_pair(seed=b"y" * 32)
+    swarm_0 = new_swarm(key_pair=key_pair_0, peerstore_opt=PeerStore())
+    swarm_1 = new_swarm(key_pair=key_pair_1, peerstore_opt=PeerStore())
+
+    async with trio.open_nursery() as nursery:
+        transport_0 = QuicTransport(key_pair_0, nursery)
+        transport_1 = QuicTransport(key_pair_1, nursery)
+        swarm_0.transport = transport_0
+        swarm_1.transport = transport_1
+
+        async with background_trio_service(swarm_0), background_trio_service(swarm_1):
+            assert await swarm_1.listen(
+                Multiaddr("/ip4/127.0.0.1/udp/0/quic-v1")
+            )
+            listen_addr = next(iter(swarm_1.listeners.values())).get_addrs()[0]
+            swarm_0.peerstore.add_addrs(swarm_1.get_peer_id(), [listen_addr], 60_000)
+
+            stream = await swarm_0.new_stream(swarm_1.get_peer_id())
+
+            assert swarm_1.get_peer_id() in swarm_0.connections
+            assert swarm_0.get_peer_id() in swarm_1.connections
+            await stream.close()
+
+        nursery.cancel_scope.cancel()

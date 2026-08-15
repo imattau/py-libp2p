@@ -60,11 +60,16 @@ class QuicStreamManager:
     def _get_or_create(self, stream_id: int, incoming: bool = False) -> QuicStream:
         stream = self.streams.get(stream_id)
         if stream is None:
+            is_client_initiated = not (stream_id & 1)
+            is_local_initiated = is_client_initiated == getattr(
+                self.connection, "_is_client", True
+            )
             stream = QuicStream(
                 stream_id,
                 self.muxed_conn,
                 self.connection,
                 self.flush_output,
+                is_local_initiated,
             )
             self.streams[stream_id] = stream
             if incoming and self.on_incoming_stream is not None:

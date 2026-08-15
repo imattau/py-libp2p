@@ -32,11 +32,13 @@ class QuicStream(IMuxedStream):
         muxed_conn: IMuxedConn,
         connection: QuicStreamConnection,
         flush_output: Callable[[], Awaitable[None]],
+        is_initiator: bool = True,
     ) -> None:
         self.stream_id = stream_id
         self.muxed_conn = muxed_conn
         self._connection = connection
         self._flush_output = flush_output
+        self.is_initiator = is_initiator
         self._buffer: deque[bytes] = deque()
         self._read_event = trio.Event()
         self._read_closed = False
