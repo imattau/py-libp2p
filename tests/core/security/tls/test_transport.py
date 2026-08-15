@@ -6,6 +6,7 @@ from trio.testing import memory_stream_pair
 from libp2p import new_swarm
 from libp2p.crypto.ed25519 import create_new_key_pair
 from libp2p.peer.peerstore import PeerStore
+from libp2p.security.exceptions import HandshakeFailure
 from libp2p.security.tls import TLS_PROTOCOL_ID
 from libp2p.security.tls.transport import TLSTransport
 from libp2p.tools.async_service import background_trio_service
@@ -80,11 +81,43 @@ async def test_tls_transport_rejects_unexpected_peer_id():
             )
 
     async def secure_inbound():
-        await transport_1.secure_inbound(RawMemoryConnection(stream_1))
+        try:
+            await transport_1.secure_inbound(RawMemoryConnection(stream_1))
+        except HandshakeFailure:
+            pass
 
     async with trio.open_nursery() as nursery:
         nursery.start_soon(secure_outbound)
         nursery.start_soon(secure_inbound)
+
+
+@pytest.mark.trio
+async def test_tls_session_returns_eof_after_raw_connection_closes():
+    stream_0, stream_1 = memory_stream_pair()
+    key_pair_0 = create_new_key_pair(seed=b"7" * 32)
+    key_pair_1 = create_new_key_pair(seed=b"8" * 32)
+    transport_0 = TLSTransport(key_pair_0)
+    transport_1 = TLSTransport(key_pair_1)
+    sessions = []
+
+    async def secure_outbound():
+        sessions.append(
+            await transport_0.secure_outbound(
+                RawMemoryConnection(stream_0), transport_1.identity.peer_id
+            )
+        )
+
+    async def secure_inbound():
+        sessions.append(await transport_1.secure_inbound(RawMemoryConnection(stream_1)))
+
+    async with trio.open_nursery() as nursery:
+        nursery.start_soon(secure_outbound)
+        nursery.start_soon(secure_inbound)
+
+    outbound, inbound = sessions
+    await inbound.connection.raw_conn.close()
+    assert await outbound.read() == b""
+    await outbound.close()
 
 
 @pytest.mark.trio

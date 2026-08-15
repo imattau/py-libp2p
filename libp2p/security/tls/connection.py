@@ -46,7 +46,8 @@ class TLSConnection:
                     break
                 except SSL.WantReadError:
                     await self._flush()
-                    await self._read()
+                    if not await self._read():
+                        raise HandshakeFailure("TLS connection closed")
                 except SSL.WantWriteError:
                     await self._flush()
             await self._flush()
@@ -71,7 +72,8 @@ class TLSConnection:
                 return self._tls.recv(size)
             except SSL.WantReadError:
                 await self._flush()
-                await self._read()
+                if not await self._read():
+                    return b""
             except SSL.WantWriteError:
                 await self._flush()
             except SSL.ZeroReturnError:
@@ -112,11 +114,12 @@ class TLSConnection:
                 return
             await self.raw_conn.write(data)
 
-    async def _read(self) -> None:
+    async def _read(self) -> bool:
         data = await self.raw_conn.read(16384)
         if not data:
-            raise HandshakeFailure("TLS connection closed")
+            return False
         self._tls.bio_write(data)
+        return True
 
 
 class TLSSession(BaseSession):
