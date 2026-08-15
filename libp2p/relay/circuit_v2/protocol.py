@@ -390,7 +390,7 @@ class CircuitV2Protocol(Service):
                 return
             elif hop_msg.type == HopMessage.CONNECT:
                 logger.debug("Handling CONNECT message from %s", remote_id)
-                await self._handle_connect(stream, hop_msg)
+                await self._handle_connect(stream, hop_msg, remote_peer_id)
             else:
                 logger.error("Invalid message type %d from %s", hop_msg.type, remote_id)
                 # Send a nice error response using _send_status method
@@ -604,7 +604,12 @@ class CircuitV2Protocol(Service):
                 except Exception as close_err:
                     logger.error("Error closing stream: %s", str(close_err))
 
-    async def _handle_connect(self, stream: INetStream, msg: Any) -> None:
+    async def _handle_connect(
+        self,
+        stream: INetStream,
+        msg: Any,
+        requester_peer_id: ID | None = None,
+    ) -> None:
         """Handle a connect request."""
         if not msg.HasField("peer") or not msg.peer.id:
             await self._send_status(
@@ -614,12 +619,23 @@ class CircuitV2Protocol(Service):
             )
             await stream.reset()
             return
-        peer_id = ID(msg.peer.id)
+        if requester_peer_id is None:
+            await self._send_status(
+                stream,
+                StatusCode.MALFORMED_MESSAGE,
+                "Missing authenticated connect peer ID",
+            )
+            await stream.reset()
+            return
+
+        destination_peer_id = ID(msg.peer.id)
         dst_stream: INetStream | None = None
 
         # Verify reservation if provided
         if msg.HasField("reservation"):
-            if not self.resource_manager.verify_reservation(peer_id, msg.reservation):
+            if not self.resource_manager.verify_reservation(
+                requester_peer_id, msg.reservation
+            ):
                 await self._send_status(
                     stream,
                     StatusCode.PERMISSION_DENIED,
@@ -629,7 +645,7 @@ class CircuitV2Protocol(Service):
                 return
 
         # Check resource limits
-        if not self.resource_manager.can_accept_connection(peer_id):
+        if not self.resource_manager.can_accept_connection(requester_peer_id):
             await self._send_status(
                 stream,
                 StatusCode.RESOURCE_LIMIT_EXCEEDED,
@@ -640,23 +656,20 @@ class CircuitV2Protocol(Service):
 
         try:
             # Store the source stream with properly typed None
-            self._active_relays[peer_id] = (stream, None)
+            self._active_relays[requester_peer_id] = (stream, None)
 
             # Try to connect to the destination with timeout
             with trio.fail_after(STREAM_READ_TIMEOUT):
-                dst_stream = await self.host.new_stream(peer_id, [STOP_PROTOCOL_ID])
+                dst_stream = await self.host.new_stream(
+                    destination_peer_id, [STOP_PROTOCOL_ID]
+                )
                 if not dst_stream:
                     raise ConnectionError("Could not connect to destination")
 
                 # Send STOP CONNECT message
                 stop_msg = StopMessage(
                     type=StopMessage.CONNECT,
-                    # Cast to extended interface with get_remote_peer_id
-                    peer=Peer(
-                        id=cast(INetStreamWithExtras, stream)
-                        .get_remote_peer_id()
-                        .to_bytes()
-                    ),
+                    peer=Peer(id=requester_peer_id.to_bytes()),
                     limit=Limit(
                         duration=self.limits.duration,
                         data=self.limits.data,
@@ -669,15 +682,11 @@ class CircuitV2Protocol(Service):
                 resp = StopMessage()
                 resp.ParseFromString(resp_bytes)
 
-                # Handle status attributes from the response
-                if resp.HasField("status"):
-                    # Get code and message attributes with defaults
-                    status_code = getattr(resp.status, "code", StatusCode.OK)
-                    # Get message with default
-                    status_msg = getattr(resp.status, "message", "Unknown error")
-                else:
-                    status_code = StatusCode.OK
-                    status_msg = "No status provided"
+                if resp.type != StopMessage.STATUS or not resp.HasField("status"):
+                    raise ConnectionError("Destination returned an invalid response")
+
+                status_code = resp.status.code
+                status_msg = resp.status.message
 
                 if status_code != StatusCode.OK:
                     raise ConnectionError(
@@ -685,10 +694,10 @@ class CircuitV2Protocol(Service):
                     )
 
             # Update active relays with destination stream
-            self._active_relays[peer_id] = (stream, dst_stream)
+            self._active_relays[requester_peer_id] = (stream, dst_stream)
 
             # Update reservation connection count
-            reservation = self.resource_manager._reservations.get(peer_id)
+            reservation = self.resource_manager._reservations.get(requester_peer_id)
             if reservation:
                 reservation.active_connections += 1
 
@@ -701,8 +710,12 @@ class CircuitV2Protocol(Service):
 
             # Start relaying data
             async with trio.open_nursery() as nursery:
-                nursery.start_soon(self._relay_data, stream, dst_stream, peer_id)
-                nursery.start_soon(self._relay_data, dst_stream, stream, peer_id)
+                nursery.start_soon(
+                    self._relay_data, stream, dst_stream, requester_peer_id
+                )
+                nursery.start_soon(
+                    self._relay_data, dst_stream, stream, requester_peer_id
+                )
 
         except (trio.TooSlowError, ConnectionError) as e:
             logger.error("Error establishing relay connection: %s", str(e))
@@ -711,8 +724,8 @@ class CircuitV2Protocol(Service):
                 StatusCode.CONNECTION_FAILED,
                 str(e),
             )
-            if peer_id in self._active_relays:
-                del self._active_relays[peer_id]
+            if requester_peer_id in self._active_relays:
+                del self._active_relays[requester_peer_id]
             # Clean up reservation connection count on failure
             await stream.reset()
             if dst_stream and not cast(INetStreamWithExtras, dst_stream).is_closed():
@@ -724,8 +737,8 @@ class CircuitV2Protocol(Service):
                 StatusCode.CONNECTION_FAILED,
                 "Internal error",
             )
-            if peer_id in self._active_relays:
-                del self._active_relays[peer_id]
+            if requester_peer_id in self._active_relays:
+                del self._active_relays[requester_peer_id]
             await stream.reset()
             if dst_stream and not cast(INetStreamWithExtras, dst_stream).is_closed():
                 await dst_stream.reset()
