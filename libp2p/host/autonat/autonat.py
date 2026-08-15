@@ -37,6 +37,7 @@ AUTONAT_PROTOCOL_ID = TProtocol("/libp2p/autonat/1.0.0")
 AUTONAT_MIN_RESPONSES = 4
 MAX_AUTONAT_MESSAGE_SIZE = 4096
 MAX_CONCURRENT_DIALS = 4
+MAX_CONCURRENT_PROBES = 4
 AUTONAT_RESULT_TTL = 3600
 AUTONAT_PROBE_TIMEOUT = 15
 AUTONAT_PROBE_INTERVAL = 300
@@ -89,6 +90,7 @@ class AutoNATService:
         self.observed_addrs: set[Multiaddr] = set()
         self._observed_addr_times: dict[Multiaddr, float] = {}
         self._dial_limiter = trio.CapacityLimiter(MAX_CONCURRENT_DIALS)
+        self._probe_limiter = trio.CapacityLimiter(MAX_CONCURRENT_PROBES)
         host.set_stream_handler(AUTONAT_PROTOCOL_ID, self.handle_stream)
 
     async def handle_stream(self, stream: NetStream) -> None:
@@ -352,7 +354,10 @@ class AutoNATService:
             server_peer_id: ID, addresses: Sequence[Multiaddr]
         ) -> None:
             try:
-                results[server_peer_id] = await self.probe(server_peer_id, addresses)
+                async with self._probe_limiter:
+                    results[server_peer_id] = await self.probe(
+                        server_peer_id, addresses
+                    )
             except Exception:
                 logger.debug(
                     "AutoNAT probe failed for server %s",
