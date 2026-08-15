@@ -475,22 +475,33 @@ class CircuitV2Protocol(Service):
                 "Connection established",
             )
 
-            # Start relaying data
-            async with trio.open_nursery() as nursery:
-                nursery.start_soon(
-                    self._relay_data,
-                    src_stream,
-                    stream,
-                    destination_peer_id,
-                    peer_id,
-                )
-                nursery.start_soon(
-                    self._relay_data,
-                    stream,
-                    src_stream,
-                    destination_peer_id,
-                    peer_id,
-                )
+            # The STOP handler owns the forwarding nursery after the handshake
+            # completes so the two relay streams have a single reader each.
+            relay_scope = (
+                trio.move_on_after(self.limits.duration)
+                if self.limits.duration > 0
+                else trio.CancelScope()
+            )
+            with relay_scope:
+                async with trio.open_nursery() as nursery:
+                    nursery.start_soon(
+                        self._relay_data,
+                        src_stream,
+                        stream,
+                        destination_peer_id,
+                        peer_id,
+                        "source_to_destination",
+                    )
+                    nursery.start_soon(
+                        self._relay_data,
+                        stream,
+                        src_stream,
+                        destination_peer_id,
+                        peer_id,
+                        "destination_to_source",
+                    )
+            if relay_scope.cancelled_caught:
+                logger.info("Relay connection duration limit reached")
 
         except trio.TooSlowError:
             logger.error("Timeout reading from stop stream")
@@ -734,31 +745,6 @@ class CircuitV2Protocol(Service):
                 ),
             )
 
-            # Start relaying data until the configured circuit duration expires.
-            relay_scope = (
-                trio.move_on_after(self.limits.duration)
-                if self.limits.duration > 0
-                else trio.CancelScope()
-            )
-            with relay_scope:
-                async with trio.open_nursery() as nursery:
-                    nursery.start_soon(
-                        self._relay_data,
-                        stream,
-                        dst_stream,
-                        destination_peer_id,
-                        requester_peer_id,
-                    )
-                    nursery.start_soon(
-                        self._relay_data,
-                        dst_stream,
-                        stream,
-                        destination_peer_id,
-                        requester_peer_id,
-                    )
-            if relay_scope.cancelled_caught:
-                logger.info("Relay connection duration limit reached")
-
         except (trio.TooSlowError, ConnectionError) as e:
             logger.error("Error establishing relay connection: %s", str(e))
             await self._send_status(
@@ -791,6 +777,7 @@ class CircuitV2Protocol(Service):
         dst_stream: INetStream,
         reservation_peer_id: ID,
         active_relay_peer_id: ID,
+        direction: str,
     ) -> None:
         """
         Relay data between two streams.
@@ -805,6 +792,8 @@ class CircuitV2Protocol(Service):
             ID of the reserved destination peer
         active_relay_peer_id : ID
             ID of the connection initiator used to match the STOP stream
+        direction : str
+            Directional data counter to apply to this relay leg
 
         """
         try:
@@ -841,7 +830,11 @@ class CircuitV2Protocol(Service):
                         break
                     try:
                         reservation.data_used += len(data)
-                        if reservation.data_used >= reservation.limits.data:
+                        reservation.data_used_by_direction[direction] += len(data)
+                        if (
+                            reservation.data_used_by_direction[direction]
+                            >= reservation.limits.data
+                        ):
                             logger.warning(
                                 "Data limit exceeded for peer %s", reservation_peer_id
                             )

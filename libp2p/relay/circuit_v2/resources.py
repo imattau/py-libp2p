@@ -52,6 +52,10 @@ class Reservation:
         self.created_at = time.time()
         self.expires_at = self.created_at + limits.duration
         self.data_used = 0
+        self.data_used_by_direction: dict[str, int] = {
+            "source_to_destination": 0,
+            "destination_to_source": 0,
+        }
         self.active_connections = 0
         self.resource_scope = resource_scope
         self.voucher = self._generate_voucher()
@@ -92,7 +96,6 @@ class Reservation:
         return (
             not self.is_expired()
             and self.active_connections < self.limits.max_circuit_conns
-            and self.data_used < self.limits.data
         )
 
     def to_proto(self) -> PbReservation:
