@@ -6,9 +6,11 @@ import time
 from typing import Any
 
 from libp2p.custom_types import TProtocol
+from libp2p.discovery.events.peerDiscovery import peerDiscovery
 from libp2p.io.exceptions import IncompleteReadError
 from libp2p.io.utils import read_exactly
 from libp2p.peer.envelope import consume_envelope
+from libp2p.peer.peerinfo import PeerInfo
 from libp2p.utils.varint import decode_uvarint_from_stream, encode_varint_prefixed
 
 from .pb.rendezvous_pb2 import Message
@@ -241,7 +243,7 @@ class RendezvousClient:
         namespace: str = "",
         limit: int = MAX_LIMIT,
         cookie: bytes = b"",
-    ) -> tuple[tuple[bytes, str], bytes]:
+    ) -> tuple[tuple[PeerInfo, ...], bytes]:
         response = await self._request(
             peer_id,
             Message(
@@ -254,11 +256,21 @@ class RendezvousClient:
         result = response.discoverResponse
         if result.status != Message.OK:
             raise RendezvousProtocolError(result.statusText)
-        registrations = tuple(
-            (registration.signedPeerRecord, registration.ns)
-            for registration in result.registrations
-        )
-        return registrations, result.cookie
+        registrations: list[PeerInfo] = []
+        for registration in result.registrations:
+            try:
+                _, record = consume_envelope(
+                    registration.signedPeerRecord,
+                    PEER_RECORD_DOMAIN,
+                )
+            except Exception as error:
+                raise RendezvousProtocolError(
+                    "discover response contains an invalid peer record"
+                ) from error
+            peer_info = PeerInfo(record.peer_id, record.addrs)
+            registrations.append(peer_info)
+            peerDiscovery.emit_peer_discovered(peer_info)
+        return tuple(registrations), result.cookie
 
     async def _request(self, peer_id: Any, message: Message) -> Message:
         stream = await self.host.new_stream(peer_id, [PROTOCOL_ID])
