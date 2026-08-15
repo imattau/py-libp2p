@@ -336,26 +336,14 @@ class Swarm(Service, INetworkService):
         """
         Close the swarm instance and cleanup resources.
         """
+        manager_running = hasattr(self, "_manager") and self._manager is not None
+        await self._close_connections()
+        await self._close_listeners(close_listener=not manager_running)
+
         # Check if manager exists before trying to stop it
-        if hasattr(self, "_manager") and self._manager is not None:
+        if manager_running:
             await self._manager.stop()
         else:
-            # Perform alternative cleanup if the manager isn't initialized
-            # Close all connections manually
-            if hasattr(self, "connections"):
-                for conn_id in list(self.connections.keys()):
-                    conn = self.connections[conn_id]
-                    await conn.close()
-
-                # Clear connection tracking dictionary
-                self.connections.clear()
-
-            # Close all listeners
-            if hasattr(self, "listeners"):
-                for listener in self.listeners.values():
-                    await listener.close()
-                self.listeners.clear()
-
             # Close the transport if it exists and has a close method
             if hasattr(self, "transport") and self.transport is not None:
                 # Check if transport has close method before calling it
@@ -365,6 +353,23 @@ class Swarm(Service, INetworkService):
                 # and we have already checked it with hasattr
 
         logger.debug("swarm successfully closed")
+
+    async def _close_connections(self) -> None:
+        if not hasattr(self, "connections"):
+            return
+        for peer_id in list(self.connections.keys()):
+            await self.close_peer(peer_id)
+        self.connections.clear()
+
+    async def _close_listeners(self, *, close_listener: bool) -> None:
+        if not hasattr(self, "listeners"):
+            return
+        listeners = list(self.listeners.items())
+        self.listeners.clear()
+        for maddr, listener in listeners:
+            if close_listener:
+                await listener.close()
+            await self.notify_listen_close(Multiaddr(maddr))
 
     async def close_peer(self, peer_id: ID) -> None:
         if peer_id not in self.connections:
@@ -437,7 +442,11 @@ class Swarm(Service, INetworkService):
                 nursery.start_soon(notifee.listen, self, multiaddr)
 
     async def notify_closed_stream(self, stream: INetStream) -> None:
-        raise NotImplementedError
+        async with trio.open_nursery() as nursery:
+            for notifee in self.notifees:
+                nursery.start_soon(notifee.closed_stream, self, stream)
 
     async def notify_listen_close(self, multiaddr: Multiaddr) -> None:
-        raise NotImplementedError
+        async with trio.open_nursery() as nursery:
+            for notifee in self.notifees:
+                nursery.start_soon(notifee.listen_close, self, multiaddr)

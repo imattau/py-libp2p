@@ -2,11 +2,8 @@
 Test Notify and Notifee by ensuring that the proper events get called, and that
 the stream passed into opened_stream is correct.
 
-Note: Listen event does not get hit because MyNotifee is passed
-into network after network has already started listening
-
-TODO: Add tests for closed_stream, listen_close when those
-features are implemented in swarm
+Note: Listen event does not get hit in the main connection lifecycle test because
+MyNotifee is passed into network after network has already started listening.
 """
 
 import enum
@@ -20,6 +17,12 @@ from libp2p.abc import (
     INetStream,
     INetwork,
     INotifee,
+)
+from libp2p.tools.async_service import (
+    background_trio_service,
+)
+from libp2p.tools.constants import (
+    LISTEN_MADDR,
 )
 from libp2p.tools.utils import connect_swarm
 from tests.utils.factories import (
@@ -44,8 +47,7 @@ class MyNotifee(INotifee):
         self.events.append(Event.OpenedStream)
 
     async def closed_stream(self, network: INetwork, stream: INetStream) -> None:
-        # TODO: It is not implemented yet.
-        pass
+        self.events.append(Event.ClosedStream)
 
     async def connected(self, network: INetwork, conn: INetConn) -> None:
         self.events.append(Event.Connected)
@@ -57,8 +59,7 @@ class MyNotifee(INotifee):
         self.events.append(Event.Listen)
 
     async def listen_close(self, network: INetwork, multiaddr: Multiaddr) -> None:
-        # TODO: It is not implemented yet.
-        pass
+        self.events.append(Event.ListenClose)
 
 
 @pytest.mark.trio
@@ -95,7 +96,7 @@ async def test_notify(security_protocol):
 
         # Create a stream
         stream = await swarms[0].new_stream(swarms[1].get_peer_id())
-        await stream.close()
+        await stream.reset()
 
         # Close peer
         await swarms[0].close_peer(swarms[1].get_peer_id())
@@ -103,28 +104,38 @@ async def test_notify(security_protocol):
         # Wait for events
         assert await wait_for_event(events_0_0, Event.Connected, 1.0)
         assert await wait_for_event(events_0_0, Event.OpenedStream, 1.0)
-        # assert await wait_for_event(
-        #     events_0_0, Event.ClosedStream, 1.0
-        # )  # Not implemented
+        assert await wait_for_event(events_0_0, Event.ClosedStream, 1.0)
         assert await wait_for_event(events_0_0, Event.Disconnected, 1.0)
 
         assert await wait_for_event(events_0_1, Event.Connected, 1.0)
         assert await wait_for_event(events_0_1, Event.OpenedStream, 1.0)
-        # assert await wait_for_event(
-        #     events_0_1, Event.ClosedStream, 1.0
-        # )  # Not implemented
+        assert await wait_for_event(events_0_1, Event.ClosedStream, 1.0)
         assert await wait_for_event(events_0_1, Event.Disconnected, 1.0)
 
         assert await wait_for_event(events_1_0, Event.Connected, 1.0)
         assert await wait_for_event(events_1_0, Event.OpenedStream, 1.0)
-        # assert await wait_for_event(
-        #     events_1_0, Event.ClosedStream, 1.0
-        # )  # Not implemented
         assert await wait_for_event(events_1_0, Event.Disconnected, 1.0)
 
         assert await wait_for_event(events_1_1, Event.Connected, 1.0)
         assert await wait_for_event(events_1_1, Event.OpenedStream, 1.0)
-        # assert await wait_for_event(
-        #     events_1_1, Event.ClosedStream, 1.0
-        # )  # Not implemented
         assert await wait_for_event(events_1_1, Event.Disconnected, 1.0)
+
+
+@pytest.mark.trio
+async def test_notify_listen_close(security_protocol):
+    async def wait_for_event(events_list, event, timeout=1.0):
+        with trio.move_on_after(timeout):
+            while event not in events_list:
+                await trio.sleep(0.01)
+            return True
+        return False
+
+    events = []
+    swarm = SwarmFactory(security_protocol=security_protocol)
+    swarm.register_notifee(MyNotifee(events))
+
+    async with background_trio_service(swarm):
+        assert await swarm.listen(LISTEN_MADDR)
+        assert await wait_for_event(events, Event.Listen, 1.0)
+        await swarm.close()
+        assert await wait_for_event(events, Event.ListenClose, 1.0)

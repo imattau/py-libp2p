@@ -71,8 +71,18 @@ as the first step.
 4. **Event bus and notifee alignment.**
    Promote connection/stream lifecycle notifications to a Go-style event surface so
    connection manager, resource manager, identify, AutoNAT, and observability can share
-   the same host signals.
-   *Effort: medium. Risk: low. Depends on: connmgr.*
+   the same host signals. The existing notifee surface now emits connection,
+   disconnection, stream-open, stream-close, listen, and listen-close events from the
+   swarm lifecycle.
+
+   Remaining parity work:
+
+   * Add a typed host event bus with subscription/filter semantics instead of only
+     direct notifee callbacks.
+   * Migrate identify, AutoNAT, pubsub, connection manager, and resource manager
+     integration points onto the shared event surface where appropriate.
+   * Add event ordering/backpressure expectations and regression coverage.
+   *Status: in progress. Effort remaining: medium. Risk: low. Depends on: connmgr.*
 
 5. **Async model decision.**
    Confirm whether the port continues on Trio or starts an asyncio migration before

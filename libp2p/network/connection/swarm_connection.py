@@ -132,12 +132,19 @@ class SwarmConn(INetConn):
         net_stream = await self._add_stream(muxed_stream)
         try:
             await self.swarm.common_stream_handler(net_stream)
+        except Exception as error:
+            logging.debug(
+                "stream handler failed for peer %s",
+                self.muxed_conn.peer_id,
+                exc_info=error,
+            )
         finally:
-            # As long as `common_stream_handler`, remove the stream.
-            self.remove_stream(net_stream)
+            # The handler owns the accepted stream lifetime; once it returns or
+            # fails, drop stream resources and emit the close notification.
+            await net_stream._remove()
 
     async def _add_stream(self, muxed_stream: IMuxedStream) -> NetStream:
-        net_stream = NetStream(muxed_stream)
+        net_stream = NetStream(muxed_stream, swarm_conn=self)
         direction = (
             Direction.OUTBOUND if muxed_stream.is_initiator else Direction.INBOUND
         )
@@ -165,3 +172,6 @@ class SwarmConn(INetConn):
         if stream not in self.streams:
             return
         self.streams.remove(stream)
+
+    async def notify_closed_stream(self, stream: NetStream) -> None:
+        await self.swarm.notify_closed_stream(stream)

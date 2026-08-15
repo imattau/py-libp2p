@@ -103,12 +103,16 @@ class NetStream(INetStream):
     __stream_state: StreamState
 
     def __init__(
-        self, muxed_stream: IMuxedStream, nursery: trio.Nursery | None = None
+        self,
+        muxed_stream: IMuxedStream,
+        nursery: trio.Nursery | None = None,
+        swarm_conn: object | None = None,
     ) -> None:
         super().__init__()
 
         self.muxed_stream = muxed_stream
         self.muxed_conn = muxed_stream.muxed_conn
+        self.swarm_conn = swarm_conn
         self.protocol_id = None
 
         # For background tasks
@@ -122,6 +126,7 @@ class NetStream(INetStream):
         self._notify_lock = trio.Lock()
 
         self.resource_scope = None
+        self._removed = False
 
     def get_protocol(self) -> TProtocol | None:
         """
@@ -251,11 +256,17 @@ class NetStream(INetStream):
         Remove stream from connection and notify listeners.
         This is called when the stream is fully closed or reset.
         """
+        if self._removed:
+            return
+        self._removed = True
+
         if self.resource_scope is not None:
             self.resource_scope.done()
             self.resource_scope = None
 
-        if hasattr(self.muxed_conn, "remove_stream"):
+        if self.swarm_conn is not None:
+            self.swarm_conn.remove_stream(self)
+        elif hasattr(self.muxed_conn, "remove_stream"):
             remove_stream = getattr(self.muxed_conn, "remove_stream")
             await remove_stream(self)
 
@@ -274,13 +285,9 @@ class NetStream(INetStream):
             if hasattr(self.muxed_conn, "swarm"):
                 swarm = getattr(self.muxed_conn, "swarm")
 
-                if hasattr(swarm, "notify_all"):
-                    await swarm.notify_all(
-                        lambda notifiee: notifiee.closed_stream(swarm, self)
-                    )
-
-                if hasattr(swarm, "refs") and hasattr(swarm.refs, "done"):
-                    swarm.refs.done()
+                await swarm.notify_closed_stream(self)
+            elif self.swarm_conn is not None:
+                await self.swarm_conn.notify_closed_stream(self)
 
     def get_remote_address(self) -> tuple[str, int] | None:
         """Delegate to the underlying muxed stream."""
