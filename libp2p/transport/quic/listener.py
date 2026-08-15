@@ -34,7 +34,9 @@ class QuicListener(IListener):
         self._addrs: tuple[Multiaddr, ...] = ()
 
     async def listen(self, maddr: Multiaddr, nursery: trio.Nursery) -> bool:
-        if maddr.protocols()[-1].name != QUIC_V1_MULTIADDR_PROTOCOL:
+        if not any(
+            protocol.name == QUIC_V1_MULTIADDR_PROTOCOL for protocol in maddr.protocols()
+        ):
             return False
         host = maddr.value_for_protocol("ip4")
         port = maddr.value_for_protocol("udp")

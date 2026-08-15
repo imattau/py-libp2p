@@ -4,6 +4,7 @@ import trio
 
 from libp2p import new_swarm
 from libp2p.crypto.ed25519 import create_new_key_pair
+from libp2p.peer.id import ID
 from libp2p.peer.peerstore import PeerStore
 from libp2p.tools.async_service import background_trio_service
 from libp2p.transport.quic.transport import (
@@ -30,6 +31,16 @@ async def test_transport_requires_nursery_for_dial():
 
 def test_transport_rejects_non_quic_multiaddr():
     assert not _is_quic_v1(Multiaddr("/ip4/127.0.0.1/udp/1/quic"))
+
+
+def test_transport_accepts_peer_component_after_quic_v1():
+    peer_id = ID.from_pubkey(create_new_key_pair(seed=b"z" * 32).public_key)
+    assert _is_quic_v1(
+        Multiaddr(
+            "/ip4/127.0.0.1/udp/1/quic-v1/p2p/"
+            + peer_id.to_base58()
+        )
+    )
 
 
 def test_transport_uses_native_connection_path():

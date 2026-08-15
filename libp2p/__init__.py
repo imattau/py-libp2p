@@ -203,7 +203,7 @@ def new_swarm(
         addr = listen_addrs[0]
         if addr.__contains__("tcp"):
             transport = TCP()
-        elif addr.protocols()[-1].name == "quic-v1":
+        elif any(protocol.name == "quic-v1" for protocol in addr.protocols()):
             transport = QuicTransport(key_pair)
         elif addr.__contains__("quic"):
             raise ValueError("unsupported QUIC protocol")

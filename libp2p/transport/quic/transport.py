@@ -40,4 +40,4 @@ class QuicTransport(ITransport):
 
 def _is_quic_v1(maddr: Multiaddr) -> bool:
     protocols = maddr.protocols()
-    return bool(protocols) and protocols[-1].name == QUIC_V1_MULTIADDR_PROTOCOL
+    return any(protocol.name == QUIC_V1_MULTIADDR_PROTOCOL for protocol in protocols)
