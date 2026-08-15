@@ -194,8 +194,8 @@ class AutoNATService:
         success = await self._try_dial(peer_id)
         self.dial_results[peer_id] = success
         response.dialResponse.status = Message.OK if success else Message.E_DIAL_ERROR
-        if success and peer.addrs:
-            response.dialResponse.addr = peer.addrs[0]
+        if success and addresses:
+            response.dialResponse.addr = addresses[0].to_bytes()
         return response
 
     async def _try_dial(self, peer_id: ID) -> bool:

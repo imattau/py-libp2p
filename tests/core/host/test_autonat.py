@@ -206,6 +206,30 @@ async def test_handle_dial_refuses_address_for_different_ip():
 
 
 @pytest.mark.trio
+async def test_handle_dial_reports_filtered_successful_address():
+    async with HostFactory.create_batch_and_listen(1) as hosts:
+        service = AutoNATService(hosts[0])
+        message = Message(type=Message.DIAL)
+        message.dial.peer.id = b"peer_id"
+        message.dial.peer.addrs.extend(
+            [
+                b"/ip4/198.51.100.1/tcp/4001",
+                b"/ip4/127.0.0.1/tcp/4002",
+            ]
+        )
+
+        with patch.object(
+            service, "_try_dial", new_callable=AsyncMock, return_value=True
+        ):
+            response = await service._handle_dial(message, ("127.0.0.1", 4000))
+
+        assert response.dialResponse.status == Message.OK
+        assert response.dialResponse.addr == Multiaddr(
+            "/ip4/127.0.0.1/tcp/4002"
+        ).to_bytes()
+
+
+@pytest.mark.trio
 async def test_handle_request():
     """Test that the handle_request method works correctly."""
     async with HostFactory.create_batch_and_listen(1) as hosts:
