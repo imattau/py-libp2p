@@ -45,6 +45,7 @@ from .peer_routing import (
     PeerRouting,
 )
 from .provider_store import (
+    PROVIDER_RECORD_REPUBLISH_INTERVAL,
     ProviderStore,
 )
 from .routing_table import (
@@ -122,8 +123,12 @@ class KadDHT(Service):
 
             # Check if it's time to republish provider records
             current_time = time.time()
-            # await self._republish_provider_records()
-            self._last_provider_republish = current_time
+            if (
+                current_time - self._last_provider_republish
+                >= PROVIDER_RECORD_REPUBLISH_INTERVAL
+            ):
+                await self.provider_store._republish_provider_records()
+                self._last_provider_republish = current_time
 
             # Clean up expired values and provider records
             expired_values = self.value_store.cleanup_expired()
