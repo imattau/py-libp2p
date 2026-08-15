@@ -40,6 +40,7 @@ from .discovery import (
 )
 from .pb.circuit_pb2 import (
     HopMessage,
+    Peer,
     StopMessage,
 )
 from .protocol import (
@@ -175,7 +176,7 @@ class CircuitV2Transport(ITransport):
             # Send HOP CONNECT message
             hop_msg = HopMessage(
                 type=HopMessage.CONNECT,
-                peer=peer_info.peer_id.to_bytes(),
+                peer=Peer(id=peer_info.peer_id.to_bytes()),
             )
             await relay_stream.write(hop_msg.SerializeToString())
 
@@ -254,7 +255,7 @@ class CircuitV2Transport(ITransport):
             # Send reservation request
             reserve_msg = HopMessage(
                 type=HopMessage.RESERVE,
-                peer=self.host.get_id().to_bytes(),
+                peer=Peer(id=self.host.get_id().to_bytes()),
             )
             await stream.write(reserve_msg.SerializeToString())
 

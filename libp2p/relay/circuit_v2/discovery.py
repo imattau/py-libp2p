@@ -33,6 +33,7 @@ from libp2p.tools.async_service import (
 
 from .pb.circuit_pb2 import (
     HopMessage,
+    Peer,
 )
 from .protocol import (
     PROTOCOL_ID,
@@ -383,7 +384,7 @@ class RelayDiscovery(Service):
                 # Create and send reservation request
                 request = HopMessage(
                     type=HopMessage.RESERVE,
-                    peer=self.host.get_id().to_bytes(),
+                    peer=Peer(id=self.host.get_id().to_bytes()),
                 )
 
                 with trio.fail_after(STREAM_TIMEOUT):

@@ -4,7 +4,9 @@ isort:skip_file
 """
 
 import builtins
+import collections.abc
 import google.protobuf.descriptor
+import google.protobuf.internal.containers
 import google.protobuf.internal.enum_type_wrapper
 import google.protobuf.message
 import sys
@@ -44,7 +46,8 @@ class HopMessage(google.protobuf.message.Message):
     LIMIT_FIELD_NUMBER: builtins.int
     STATUS_FIELD_NUMBER: builtins.int
     type: global___HopMessage.Type.ValueType
-    peer: builtins.bytes
+    @property
+    def peer(self) -> global___Peer: ...
     @property
     def reservation(self) -> global___Reservation: ...
     @property
@@ -55,7 +58,7 @@ class HopMessage(google.protobuf.message.Message):
         self,
         *,
         type: global___HopMessage.Type.ValueType = ...,
-        peer: builtins.bytes = ...,
+        peer: global___Peer | None = ...,
         reservation: global___Reservation | None = ...,
         limit: global___Limit | None = ...,
         status: global___Status | None = ...,
@@ -86,39 +89,66 @@ class StopMessage(google.protobuf.message.Message):
     PEER_FIELD_NUMBER: builtins.int
     STATUS_FIELD_NUMBER: builtins.int
     type: global___StopMessage.Type.ValueType
-    peer: builtins.bytes
+    @property
+    def peer(self) -> global___Peer: ...
+    @property
+    def limit(self) -> global___Limit: ...
     @property
     def status(self) -> global___Status: ...
     def __init__(
         self,
         *,
         type: global___StopMessage.Type.ValueType = ...,
-        peer: builtins.bytes = ...,
+        peer: global___Peer | None = ...,
+        limit: global___Limit | None = ...,
         status: global___Status | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["status", b"status"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["peer", b"peer", "status", b"status", "type", b"type"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["limit", b"limit", "peer", b"peer", "status", b"status", "type", b"type"]) -> None: ...
 
 global___StopMessage = StopMessage
+
+@typing.final
+class Peer(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    ID_FIELD_NUMBER: builtins.int
+    ADDRS_FIELD_NUMBER: builtins.int
+    id: builtins.bytes
+    @property
+    def addrs(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.bytes]: ...
+    def __init__(
+        self,
+        *,
+        id: builtins.bytes = ...,
+        addrs: collections.abc.Iterable[builtins.bytes] | None = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["addrs", b"addrs", "id", b"id"]) -> None: ...
+
+global___Peer = Peer
 
 @typing.final
 class Reservation(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     VOUCHER_FIELD_NUMBER: builtins.int
-    SIGNATURE_FIELD_NUMBER: builtins.int
     EXPIRE_FIELD_NUMBER: builtins.int
+    ADDRS_FIELD_NUMBER: builtins.int
+    SIGNATURE_FIELD_NUMBER: builtins.int
     voucher: builtins.bytes
     signature: builtins.bytes
     expire: builtins.int
+    @property
+    def addrs(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.bytes]: ...
     def __init__(
         self,
         *,
         voucher: builtins.bytes = ...,
+        addrs: collections.abc.Iterable[builtins.bytes] | None = ...,
         signature: builtins.bytes = ...,
         expire: builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["expire", b"expire", "signature", b"signature", "voucher", b"voucher"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["addrs", b"addrs", "expire", b"expire", "signature", b"signature", "voucher", b"voucher"]) -> None: ...
 
 global___Reservation = Reservation
 

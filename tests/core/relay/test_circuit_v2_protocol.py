@@ -395,7 +395,8 @@ async def test_circuit_v2_reservation_basic():
 
                 logger.info("Preparing reservation request")
                 request = proto.HopMessage(
-                    type=proto.HopMessage.RESERVE, peer=client_host.get_id().to_bytes()
+                    type=proto.HopMessage.RESERVE,
+                    peer=proto.Peer(id=client_host.get_id().to_bytes()),
                 )
 
                 logger.info("Sending reservation request")
@@ -469,7 +470,7 @@ async def test_circuit_v2_reservation_limit():
                 # Only handle RESERVE requests
                 if request.type == proto.HopMessage.RESERVE:
                     # Extract peer ID from request
-                    peer_id = ID(request.peer)
+                    peer_id = ID(request.peer.id)
                     logger.info(
                         "Mock handler received reservation request from %s", peer_id
                     )
@@ -565,7 +566,8 @@ async def test_circuit_v2_reservation_limit():
 
                 logger.info("Preparing reservation request for client1")
                 request1 = proto.HopMessage(
-                    type=proto.HopMessage.RESERVE, peer=client1_host.get_id().to_bytes()
+                    type=proto.HopMessage.RESERVE,
+                    peer=proto.Peer(id=client1_host.get_id().to_bytes()),
                 )
 
                 logger.info("Sending reservation request for client1")
@@ -621,7 +623,8 @@ async def test_circuit_v2_reservation_limit():
 
                 logger.info("Preparing reservation request for client2")
                 request2 = proto.HopMessage(
-                    type=proto.HopMessage.RESERVE, peer=client2_host.get_id().to_bytes()
+                    type=proto.HopMessage.RESERVE,
+                    peer=proto.Peer(id=client2_host.get_id().to_bytes()),
                 )
 
                 logger.info("Sending reservation request for client2")

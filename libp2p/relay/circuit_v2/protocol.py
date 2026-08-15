@@ -43,6 +43,7 @@ from libp2p.tools.async_service import (
 from .pb.circuit_pb2 import (
     HopMessage,
     Limit,
+    Peer,
     Reservation,
     Status as PbStatus,
     StopMessage,
@@ -438,7 +439,7 @@ class CircuitV2Protocol(Service):
                 return
 
             # Get the source stream from active relays
-            peer_id = ID(stop_msg.peer)
+            peer_id = ID(stop_msg.peer.id)
             if peer_id not in self._active_relays:
                 # Use direct attribute access to create status object for error response
                 await self._send_stop_status(
@@ -493,7 +494,7 @@ class CircuitV2Protocol(Service):
         """Handle a reservation request."""
         peer_id = None
         try:
-            peer_id = ID(msg.peer)
+            peer_id = ID(msg.peer.id)
             logger.debug("Handling reservation request from peer %s", peer_id)
 
             # Check if we can accept more reservations
@@ -507,7 +508,7 @@ class CircuitV2Protocol(Service):
 
                 status_msg = HopMessage(
                     type=HopMessage.STATUS,
-                    status=status.to_pb(),
+                    status=status,
                 )
                 await stream.write(status_msg.SerializeToString())
                 return
@@ -524,7 +525,7 @@ class CircuitV2Protocol(Service):
 
                 response = HopMessage(
                     type=HopMessage.STATUS,
-                    status=status.to_pb(),
+                    status=status,
                     reservation=Reservation(
                         expire=int(time.time() + ttl),
                         voucher=b"",  # We don't use vouchers yet
@@ -583,7 +584,7 @@ class CircuitV2Protocol(Service):
 
     async def _handle_connect(self, stream: INetStream, msg: Any) -> None:
         """Handle a connect request."""
-        peer_id = ID(msg.peer)
+        peer_id = ID(msg.peer.id)
         dst_stream: INetStream | None = None
 
         # Verify reservation if provided
@@ -621,9 +622,11 @@ class CircuitV2Protocol(Service):
                 stop_msg = StopMessage(
                     type=StopMessage.CONNECT,
                     # Cast to extended interface with get_remote_peer_id
-                    peer=cast(INetStreamWithExtras, stream)
-                    .get_remote_peer_id()
-                    .to_bytes(),
+                    peer=Peer(
+                        id=cast(INetStreamWithExtras, stream)
+                        .get_remote_peer_id()
+                        .to_bytes()
+                    ),
                 )
                 await dst_stream.write(stop_msg.SerializeToString())
 

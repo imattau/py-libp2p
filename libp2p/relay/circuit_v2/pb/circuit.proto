@@ -11,7 +11,7 @@ message HopMessage {
   }
 
   Type type = 1;
-  bytes peer = 2;
+  Peer peer = 2;
   Reservation reservation = 3;
   Limit limit = 4;
   Status status = 5;
@@ -24,14 +24,21 @@ message StopMessage {
   }
 
   Type type = 1;
-  bytes peer = 2;
-  Status status = 3;
+  Peer peer = 2;
+  Limit limit = 3;
+  Status status = 4;
+}
+
+message Peer {
+  bytes id = 1;
+  repeated bytes addrs = 2;
 }
 
 message Reservation {
-  bytes voucher = 1;
-  bytes signature = 2;
-  int64 expire = 3;
+  uint64 expire = 1;
+  repeated bytes addrs = 2;
+  bytes voucher = 3;
+  bytes signature = 4; // Legacy field retained for local compatibility.
 }
 
 message Limit {
