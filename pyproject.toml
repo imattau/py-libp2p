@@ -15,6 +15,7 @@ authors = [
 ]
 dependencies = [
     "base58>=1.0.3",
+    "aioquic>=1.0.0",
     "coincurve>=10.0.0",
     "exceptiongroup>=1.2.0; python_version < '3.11'",
     "grpcio>=1.41.0",
