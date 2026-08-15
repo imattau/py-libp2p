@@ -44,12 +44,10 @@ as the first step.
    coverage live in ``tests/core/host/connmgr/``. The manager also runs as a
    Trio service for periodic background trimming.
 
-   Remaining parity work:
-
-   * Revisit ranking once py-libp2p supports multiple connections per peer; the
-     current swarm is still one connection per peer.
-   * Decide whether emergency memory-pressure trimming belongs in this layer.
-   *Status: in progress. Effort remaining: low. Risk: low.*
+   Multi-connection ranking and emergency memory-pressure trimming are deferred to
+   the later connection/resource-management phase once those capabilities exist.
+   *Status: done for the current one-connection-per-peer swarm. Effort remaining:
+   deferred. Risk: low.*
 
 3. **Resource manager — foundation port started.**
    ``libp2p.host.resource_manager`` now provides the initial Go-style scope model:
@@ -63,10 +61,9 @@ as the first step.
    Relay-v2 reservations and forwarded data also consume the shared ``relay``
    service scope and release their accounting on expiry or shutdown.
 
-   Remaining parity work:
-
-   * Add metrics/trace reporting once the observability layer exists.
-   *Status: in progress. Effort remaining: low. Risk: low. Depends on: observability.*
+   Metrics and trace reporting are deferred to P6 observability.
+   *Status: done for the current resource-management scope. Effort remaining:
+   deferred. Risk: low.*
 
 4. **Event bus and notifee alignment.**
    Promote connection/stream lifecycle notifications to a Go-style event surface so
@@ -79,47 +76,33 @@ as the first step.
    The connection manager also supports binding to the event bus for its
    connected/disconnected lifecycle input.
 
-   Remaining parity work:
-
-   * Migrate identify, AutoNAT, and remaining resource-manager integration points
-     onto the shared event surface where appropriate.
-   * Extend event ordering/backpressure coverage as more services consume the bus.
-   *Status: in progress. Effort remaining: low. Risk: low. Depends on: connmgr.*
+   Identify and AutoNAT lifecycle integration is deferred to P3 service completion;
+   neither currently registers a lifecycle consumer. The current event surface,
+   pubsub/connmgr consumers, ordering, and backpressure coverage are complete.
+   *Status: done for current consumers. Effort remaining: deferred. Risk: low.*
 
 5. **Async model decision.**
    Continue the Go-parity port on Trio. An asyncio migration can be reconsidered as a
    separate compatibility project, but it no longer blocks P0 implementation work.
    *Status: done. Effort: none. Risk: accepted.*
 
-P1 — Interop validation harness
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Interop is still required for "done", but it follows the local Go-parity ports instead
-of driving them.
-
-6. **Stand up real go-libp2p interop tests.**
-   ``tests/interop/go_libp2p/test_go_basic.py`` is an ``assert True`` placeholder; the
-   rust/zig suites are the same. Replace with a real ping/identify matrix against
-   go-libp2p so we have a trustworthy compatibility baseline as ports land.
-   *Effort: medium. Risk: surfaces latent bugs — which is the point.*
-
-7. **Repair the js-libp2p ping interop.**
-   The js interop harness reports ping as "Not Working" (JS client aborts). Root-cause
-   the yamux/multistream negotiation and make ping pass.
-   *Effort: medium. Risk: medium (may reveal protocol deviations).*
-
-8. **Wire interop into CI.**
-   Add an opt-in CI job (dockerized go/js nodes) so regressions are caught continuously.
-
 P2 — Core transports & security
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 These close the biggest functional gaps for users choosing py-libp2p for new projects.
 
+P2 is now the active implementation priority. Interoperability validation is retained
+for a later phase so external nodes verify native ports without becoming a development
+dependency.
+
 9. **QUIC transport.**
-   Implement ``libp2p-quic`` (quic-v1) on top of an async QUIC library. Unblocks
-   WebTransport and WebRTC later, and is the modern default transport upstream.
-   *Effort: high. Risk: medium. Depends on: async-model decision (P0).*
+   Implement ``libp2p-quic`` (quic-v1) on top of ``aioquic``'s sans-I/O API, with
+   Trio owning UDP I/O, timers, cancellation, and task scheduling. QUIC streams
+   are used directly, without the existing security and muxer upgrade layers;
+   libp2p peer identity is authenticated through the TLS 1.3 certificate.
+   Start with QUIC v1 and defer draft-29 support.
+   *Effort: high. Risk: medium. Depends on: Trio decision (P0), peer identity
+   certificate support (P2).*
 
 10. **TLS secure channel.**
    Implement ``libp2p-tls`` per the spec so Noise is not the only production security
@@ -139,7 +122,7 @@ The highest-impact end-user feature. Several pieces already exist as prototypes.
     ``libp2p/host/autonat/`` exists but is unproven against go-libp2p. Validate
     client/server mode and integrate its reachability signal into the address book.
     *Effort: medium. Risk: low. Depends on: event bus/notifee alignment (P0);
-    validate through interop harness (P1).*
+    validate through interop harness (P7).*
 
 13. **Finish & verify circuit-relay-v2.**
     ``libp2p/relay/circuit_v2/`` is substantial but untested cross-impl. Validate
@@ -168,7 +151,7 @@ P5 — Routing & storage
 17. **Complete & verify kad-dht.**
     ``libp2p/kad_dht/`` is large but untested against go-libp2p. Validate peer routing,
     value store, provider store, and refresh behavior via test-plans.
-    *Effort: high. Risk: medium. Depends on: interop harness (P1).*
+    *Effort: high. Risk: medium. Depends on: interop harness (P7).*
 
 18. **Content routing + delegated routing.**
     Expose the content-routing interface (put/get providers) backed by the DHT, plus a
@@ -190,12 +173,37 @@ P6 — Observability & polish
     Decide the fate of deprecated-in-upstream components (secio, plaintext/insecure,
     mplex) and align defaults with go-libp2p (noise + tls + yamux + quic).
 
+22. **Multi-connection connection-manager parity.**
+    Revisit per-peer ranking and emergency memory-pressure trimming after the swarm
+    supports multiple simultaneous connections per peer and exposes the required
+    resource-pressure signals.
+    *Effort: medium. Risk: medium. Depends on: multi-connection swarm support.*
+
+P7 — Interoperability validation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Interop follows the native transport, security, and protocol ports. It is an external
+compatibility check, not a runtime dependency or an implementation prerequisite.
+
+23. **Stand up real go-libp2p interop tests.**
+    The opt-in ``p2pd`` ping test lives in ``tests/interop/go_libp2p/`` and should be
+    expanded into ping/identify matrices once the native P2–P5 work is ready.
+    *Effort: medium. Risk: surfaces protocol deviations.*
+
+24. **Repair the js-libp2p ping interop.**
+    Root-cause the existing yamux/multistream negotiation failure and make ping pass.
+    *Effort: medium. Risk: medium.*
+
+25. **Wire interop into CI.**
+    Add opt-in CI jobs for Go, JS, and other implementations after the harness is
+    deterministic and environment-independent.
+    *Effort: medium. Risk: low.*
+
 Cross-cutting decisions
 -----------------------
 
-* **Async model (do first).** Confirm or migrate the Trio-based core. This is the
-  highest-leverage decision: it affects the QUIC/TLS/WebSocket work and the ability to
-  attract contributors used to asyncio.
+* **Async model (done).** The core remains Trio-based. QUIC will use a sans-I/O
+  backend so the transport does not introduce an asyncio runtime dependency.
 * **Test-plans adoption.** For every P2–P5 module, add the corresponding
   `libp2p/test-plans` scenario so "done" is defined by cross-implementation success,
   not just internal unit tests.
@@ -205,9 +213,8 @@ Suggested ordering within a sprint
 
 Work can proceed in parallel once the P0 foundation ports are underway:
 
-* One stream finishes connection manager integration, then ports resource manager (P0).
-* A second stream builds the interop validation harness (P1).
-* A third stream drives transports/security (P2), then NAT traversal (P3).
+* P0 foundation work is complete for the current one-connection-per-peer architecture.
+* The active stream drives transports/security (P2), then NAT traversal (P3).
 * A fourth stream drives kad-dht verification (P5) and discovery (P4).
 
 The matrix in the README should be updated whenever a module's status changes.
