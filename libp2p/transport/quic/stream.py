@@ -69,6 +69,8 @@ class QuicStream(IMuxedStream):
                 raise MuxedStreamEOF()
             event = self._read_event
             await event.wait()
+            if self._reset:
+                raise MuxedStreamReset()
             if event is self._read_event:
                 self._read_event = trio.Event()
 
