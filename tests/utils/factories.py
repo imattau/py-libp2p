@@ -31,12 +31,12 @@ from libp2p.abc import (
     ISecureConn,
     ISecureTransport,
 )
-from libp2p.crypto.ed25519 import create_new_key_pair as create_ed25519_key_pair
 from libp2p.crypto.keys import (
     KeyPair,
     PrivateKey,
 )
 from libp2p.crypto.secp256k1 import create_new_key_pair as create_secp256k1_key_pair
+from libp2p.crypto.x25519 import create_new_key_pair as create_x25519_key_pair
 from libp2p.custom_types import (
     TMuxerOptions,
     TProtocol,
@@ -147,7 +147,7 @@ def initialize_peerstore_with_our_keypair(self_id: ID, key_pair: KeyPair) -> Pee
 
 
 def noise_static_key_factory() -> PrivateKey:
-    return create_ed25519_key_pair().private_key
+    return create_x25519_key_pair().private_key
 
 
 def noise_handshake_payload_factory() -> NoiseHandshakePayload:

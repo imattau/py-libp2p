@@ -1,12 +1,5 @@
-from Crypto.Hash import (
-    SHA256,
-)
 from nacl.exceptions import (
     BadSignatureError,
-)
-from nacl.public import (
-    PrivateKey as PrivateKeyImpl,
-    PublicKey as PublicKeyImpl,
 )
 from nacl.signing import (
     SigningKey,
@@ -23,7 +16,7 @@ from libp2p.crypto.keys import (
 
 
 class Ed25519PublicKey(PublicKey):
-    def __init__(self, impl: PublicKeyImpl) -> None:
+    def __init__(self, impl: VerifyKey) -> None:
         self.impl = impl
 
     def to_bytes(self) -> bytes:
@@ -31,7 +24,7 @@ class Ed25519PublicKey(PublicKey):
 
     @classmethod
     def from_bytes(cls, key_bytes: bytes) -> "Ed25519PublicKey":
-        return cls(PublicKeyImpl(key_bytes))
+        return cls(VerifyKey(key_bytes))
 
     def get_type(self) -> KeyType:
         return KeyType.Ed25519
@@ -46,7 +39,7 @@ class Ed25519PublicKey(PublicKey):
 
 
 class Ed25519PrivateKey(PrivateKey):
-    def __init__(self, impl: PrivateKeyImpl) -> None:
+    def __init__(self, impl: SigningKey) -> None:
         self.impl = impl
 
     @classmethod
@@ -54,7 +47,7 @@ class Ed25519PrivateKey(PrivateKey):
         if not seed:
             seed = utils.random()
 
-        private_key_impl = PrivateKeyImpl.from_seed(seed)
+        private_key_impl = SigningKey(seed)
         return cls(private_key_impl)
 
     def to_bytes(self) -> bytes:
@@ -62,19 +55,17 @@ class Ed25519PrivateKey(PrivateKey):
 
     @classmethod
     def from_bytes(cls, data: bytes) -> "Ed25519PrivateKey":
-        impl = PrivateKeyImpl(data)
+        impl = SigningKey(data)
         return cls(impl)
 
     def get_type(self) -> KeyType:
         return KeyType.Ed25519
 
     def sign(self, data: bytes) -> bytes:
-        h = SHA256.new(data)
-        signing_key = SigningKey(self.to_bytes())
-        return signing_key.sign(h.digest())
+        return self.impl.sign(data).signature
 
     def get_public_key(self) -> PublicKey:
-        return Ed25519PublicKey(self.impl.public_key)
+        return Ed25519PublicKey(self.impl.verify_key)
 
 
 def create_new_key_pair(seed: bytes | None = None) -> KeyPair:
