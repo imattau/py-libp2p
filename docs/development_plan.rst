@@ -206,8 +206,12 @@ P6 — Observability & polish
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 20. **Metrics (Prometheus).**
-    Expose swarm, resource-manager, and protocol metrics via a Prometheus endpoint.
-    *Effort: medium. Risk: low.*
+    The native Trio implementation now exposes swarm connection/listener counts,
+    resource-manager connection/stream/FD/memory gauges, custom collectors, and a
+    ``GET /metrics`` Prometheus text endpoint without adding a runtime dependency.
+    *Status: native endpoint complete for the current scope; broader protocol
+    instrumentation and deployment validation remain follow-up work. Effort remaining:
+    low. Risk: low.*
 
 21. **Legacy cleanup & alignment.**
     Decide the fate of deprecated-in-upstream components (secio, plaintext/insecure,
