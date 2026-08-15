@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 import logging
 
 from multiaddr import Multiaddr
@@ -214,6 +215,32 @@ class AutoNATService:
 
         """
         return self.status
+
+    async def probe(
+        self, server_peer_id: ID, addresses: Sequence[Multiaddr]
+    ) -> bool:
+        """Ask an AutoNAT server to dial this node's advertised addresses."""
+        request = Message(type=Type.DIAL)
+        request_peer = request.dial.peers.add()
+        request_peer.id = self.host.get_id().to_bytes()
+        request_peer.addrs.extend(str(address).encode() for address in addresses)
+
+        stream = await self.host.new_stream(server_peer_id, [AUTONAT_PROTOCOL_ID])
+        try:
+            await stream.write(request.SerializeToString())
+            response = Message()
+            response.ParseFromString(await stream.read())
+            success = False
+            if response.type == Type.DIAL_RESPONSE:
+                for peer in response.dial_response.peers:
+                    if peer.id == self.host.get_id().to_bytes():
+                        success = peer.success
+                        break
+            self.dial_results[server_peer_id] = success
+            self.update_status()
+            return success
+        finally:
+            await stream.close()
 
     def update_status(self) -> None:
         """

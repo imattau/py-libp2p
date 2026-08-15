@@ -4,6 +4,7 @@ from unittest.mock import (
 )
 
 import pytest
+from multiaddr import Multiaddr
 
 from libp2p.host.autonat.autonat import (
     AUTONAT_PROTOCOL_ID,
@@ -113,6 +114,7 @@ async def test_try_dial():
 
             assert result is True
             mock_new_stream.assert_called_once_with(peer_id, [AUTONAT_PROTOCOL_ID])
+
             mock_stream.close.assert_called_once()
 
         # Test failed dial
@@ -125,6 +127,36 @@ async def test_try_dial():
 
             assert result is False
             mock_new_stream.assert_called_once_with(peer_id, [AUTONAT_PROTOCOL_ID])
+
+
+@pytest.mark.trio
+async def test_probe_sends_addresses_and_records_result():
+    async with HostFactory.create_batch_and_listen(2) as hosts:
+        host1, host2 = hosts
+        service = AutoNATService(host1)
+        mock_stream = AsyncMock(spec=NetStream)
+        response = Message(type=Type.DIAL_RESPONSE)
+        peer = response.dial_response.peers.add()
+        peer.id = host1.get_id().to_bytes()
+        peer.success = True
+        mock_stream.read.return_value = response.SerializeToString()
+
+        with patch.object(
+            host1, "new_stream", new_callable=AsyncMock, return_value=mock_stream
+        ) as mock_new_stream:
+            result = await service.probe(
+                host2.get_id(), [Multiaddr("/ip4/127.0.0.1/tcp/4001")]
+            )
+
+        assert result is True
+        assert service.dial_results[host2.get_id()] is True
+        mock_new_stream.assert_awaited_once_with(
+            host2.get_id(), [AUTONAT_PROTOCOL_ID]
+        )
+        request = Message.FromString(mock_stream.write.call_args.args[0])
+        assert request.dial.peers[0].id == host1.get_id().to_bytes()
+        assert list(request.dial.peers[0].addrs) == [b"/ip4/127.0.0.1/tcp/4001"]
+        mock_stream.close.assert_awaited_once()
 
 
 @pytest.mark.trio
