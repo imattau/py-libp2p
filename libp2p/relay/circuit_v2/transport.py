@@ -203,7 +203,18 @@ class CircuitV2Transport(ITransport):
         try:
             # First try to make a reservation if enabled
             if self.config.enable_client:
-                success = await self._make_reservation(relay_stream, relay_peer_id)
+                relay_info = self.discovery.get_relay_info(relay_peer_id)
+                existing_reservation = self._reservation_streams.get(relay_peer_id)
+                has_live_reservation = (
+                    existing_reservation is not None
+                    and relay_info is not None
+                    and relay_info.has_reservation
+                    and relay_info.reservation_expires_at is not None
+                    and relay_info.reservation_expires_at > time.time()
+                )
+                success = has_live_reservation or await self._make_reservation(
+                    relay_stream, relay_peer_id
+                )
                 if not success:
                     logger.warning(
                         "Failed to make reservation with relay %s", relay_peer_id
@@ -217,18 +228,20 @@ class CircuitV2Transport(ITransport):
                             f"Could not open circuit stream to relay {relay_peer_id}"
                         )
                 else:
-                    reservation_stream = relay_stream
-                    previous = self._reservation_streams.pop(relay_peer_id, None)
-                    if previous is not None:
-                        await previous.close()
-                    self._reservation_streams[relay_peer_id] = reservation_stream
-                    relay_stream = await self.host.new_stream(
-                        relay_peer_id, [PROTOCOL_ID]
-                    )
-                    if not relay_stream:
-                        raise ConnectionError(
-                            f"Could not open circuit stream to relay {relay_peer_id}"
+                    if not has_live_reservation:
+                        reservation_stream = relay_stream
+                        previous = self._reservation_streams.pop(relay_peer_id, None)
+                        if previous is not None:
+                            await previous.close()
+                        self._reservation_streams[relay_peer_id] = reservation_stream
+                        relay_stream = await self.host.new_stream(
+                            relay_peer_id, [PROTOCOL_ID]
                         )
+                        if not relay_stream:
+                            raise ConnectionError(
+                                "Could not open circuit stream to relay "
+                                f"{relay_peer_id}"
+                            )
 
             # Send HOP CONNECT message
             hop_msg = HopMessage(

@@ -209,6 +209,50 @@ async def test_circuit_v2_transport_prefers_live_reservation():
 
 
 @pytest.mark.trio
+async def test_circuit_v2_transport_reuses_live_reservation_stream():
+    async with HostFactory.create_batch_and_listen(3) as hosts:
+        client_host, relay_host, target_host = hosts
+        transport = CircuitV2Transport(
+            client_host,
+            CircuitV2Protocol(client_host, DEFAULT_RELAY_LIMITS, allow_hop=False),
+            RelayConfig(),
+        )
+        now = time.time()
+        transport.discovery._discovered_relays[relay_host.get_id()] = RelayInfo(
+            peer_id=relay_host.get_id(),
+            discovered_at=now,
+            last_seen=now,
+            has_reservation=True,
+            reservation_expires_at=now + 60,
+        )
+        reservation_stream = AsyncMock()
+        circuit_stream = AsyncMock()
+        response = encode_message(
+            HopMessage(
+                type=HopMessage.STATUS,
+                status=Status(code=Status.OK),
+            ).SerializeToString()
+        )
+        circuit_stream.read.side_effect = [response[:1], response[1:]]
+        transport._reservation_streams[relay_host.get_id()] = reservation_stream
+
+        with patch.object(
+            client_host,
+            "new_stream",
+            new_callable=AsyncMock,
+            return_value=circuit_stream,
+        ) as new_stream:
+            connection = await transport.dial_peer_info(
+                PeerInfo(target_host.get_id(), []), relay_peer_id=relay_host.get_id()
+            )
+
+        assert connection.stream is circuit_stream
+        new_stream.assert_awaited_once()
+        reservation_stream.write.assert_not_awaited()
+        assert circuit_stream.write.await_count == 1
+
+
+@pytest.mark.trio
 async def test_circuit_v2_transport_parses_circuit_multiaddr():
     async with HostFactory.create_batch_and_listen(3) as hosts:
         client_host, relay_host, target_host = hosts
