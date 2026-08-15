@@ -7,11 +7,7 @@ from libp2p.custom_types import (
     TProtocol,
 )
 from libp2p.host.autonat.pb.autonat_pb2 import (
-    DialResponse,
     Message,
-    PeerInfo,
-    Status,
-    Type,
 )
 from libp2p.host.basic_host import (
     BasicHost,
@@ -25,8 +21,12 @@ from libp2p.peer.id import (
 from libp2p.peer.peerstore import (
     IPeerStore,
 )
+from libp2p.utils.varint import (
+    encode_varint_prefixed,
+    read_varint_prefixed_bytes,
+)
 
-AUTONAT_PROTOCOL_ID = TProtocol("/ipfs/autonat/1.0.0")
+AUTONAT_PROTOCOL_ID = TProtocol("/libp2p/autonat/1.0.0")
 
 logger = logging.getLogger("libp2p.host.autonat")
 
@@ -85,11 +85,11 @@ class AutoNATService:
 
         """
         try:
-            request_bytes = await stream.read()
+            request_bytes = await read_varint_prefixed_bytes(stream)
             request = Message()
             request.ParseFromString(request_bytes)
             response = await self._handle_request(request)
-            await stream.write(response.SerializeToString())
+            await stream.write(encode_varint_prefixed(response.SerializeToString()))
         except Exception as e:
             logger.error("Error handling AutoNAT stream: %s", str(e))
         finally:
@@ -119,16 +119,13 @@ class AutoNATService:
         else:
             message = request
 
-        if message.type == Type.Value("DIAL"):
+        if message.type == Message.DIAL:
             response = await self._handle_dial(message)
             return response
 
         # Handle unknown request type
-        response = Message()
-        response.type = Type.Value("DIAL_RESPONSE")
-        error_response = DialResponse()
-        error_response.status = Status.E_INTERNAL_ERROR
-        response.dial_response.CopyFrom(error_response)
+        response = Message(type=Message.DIAL_RESPONSE)
+        response.dialResponse.status = Message.E_BAD_REQUEST
         return response
 
     async def _handle_dial(self, message: Message) -> Message:
@@ -148,34 +145,26 @@ class AutoNATService:
             attempts, including success/failure status for each peer.
 
         """
-        response = Message()
-        response.type = Type.Value("DIAL_RESPONSE")
-        dial_response = DialResponse()
-        dial_response.status = Status.OK
+        response = Message(type=Message.DIAL_RESPONSE)
+        if not message.HasField("dial") or not message.dial.HasField("peer"):
+            response.dialResponse.status = Message.E_BAD_REQUEST
+            return response
 
-        for peer in message.dial.peers:
-            peer_id = ID(peer.id)
-            addresses: list[Multiaddr] = []
-            for raw_addr in peer.addrs:
-                try:
-                    addresses.append(Multiaddr(raw_addr.decode()))
-                except (UnicodeDecodeError, ValueError):
-                    logger.debug("ignoring invalid AutoNAT address for %s", peer_id)
-            if addresses:
-                self.peerstore.add_addrs(peer_id, addresses, 60_000)
-            if peer_id in self.dial_results:
-                success = self.dial_results[peer_id]
-            else:
-                success = await self._try_dial(peer_id)
-                self.dial_results[peer_id] = success
-
-            peer_info = PeerInfo()
-            peer_info.id = peer_id.to_bytes()
-            peer_info.addrs.extend(peer.addrs)
-            peer_info.success = success
-            dial_response.peers.append(peer_info)
-
-        response.dial_response.CopyFrom(dial_response)
+        peer = message.dial.peer
+        peer_id = ID(peer.id)
+        addresses: list[Multiaddr] = []
+        for raw_addr in peer.addrs:
+            try:
+                addresses.append(Multiaddr(raw_addr.decode()))
+            except (UnicodeDecodeError, ValueError):
+                logger.debug("ignoring invalid AutoNAT address for %s", peer_id)
+        if addresses:
+            self.peerstore.add_addrs(peer_id, addresses, 60_000)
+        success = await self._try_dial(peer_id)
+        self.dial_results[peer_id] = success
+        response.dialResponse.status = Message.OK if success else Message.E_DIAL_ERROR
+        if success and peer.addrs:
+            response.dialResponse.addr = peer.addrs[0]
         return response
 
     async def _try_dial(self, peer_id: ID) -> bool:
@@ -220,8 +209,8 @@ class AutoNATService:
         self, server_peer_id: ID, addresses: Sequence[Multiaddr]
     ) -> bool:
         """Ask an AutoNAT server to dial this node's advertised addresses."""
-        request = Message(type=Type.DIAL)
-        request_peer = request.dial.peers.add()
+        request = Message(type=Message.DIAL)
+        request_peer = request.dial.peer
         request_peer.id = self.host.get_id().to_bytes()
         request_peer.addrs.extend(str(address).encode() for address in addresses)
 
@@ -229,13 +218,10 @@ class AutoNATService:
         try:
             await stream.write(request.SerializeToString())
             response = Message()
-            response.ParseFromString(await stream.read())
-            success = False
-            if response.type == Type.DIAL_RESPONSE:
-                for peer in response.dial_response.peers:
-                    if peer.id == self.host.get_id().to_bytes():
-                        success = peer.success
-                        break
+            response.ParseFromString(await read_varint_prefixed_bytes(stream))
+            success = response.type == Message.DIAL_RESPONSE and (
+                response.dialResponse.status == Message.OK
+            )
             self.dial_results[server_peer_id] = success
             self.update_status()
             return success
